@@ -5,6 +5,7 @@ import { PALETTES } from './modes/palettes';
 import type { Mode } from './modes/types';
 import { forgetImage, loadImageFile, restoreImage } from './overlay/image';
 import { FONTS, renderText } from './overlay/text';
+import { FILTERS } from './render/filters';
 import { Renderer } from './render/Renderer';
 import { type Effects, loadSettings, paramValue, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
@@ -18,6 +19,7 @@ for (const store of [settings.variants, settings.params]) {
 }
 if (!PALETTES.some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
 if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
+if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
 
 const canvas = h('canvas', { class: 'stage' });
 const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
@@ -150,6 +152,18 @@ const actions: PanelActions = {
     void updateText();
   },
   saveSettings: () => saveSettings(settings),
+  setFilter(i) {
+    settings.filter = i;
+    changed();
+  },
+  setFilterAmount(v) {
+    settings.filterAmount = v;
+    saveSettings(settings);
+  },
+  setFilterBeat(on) {
+    settings.filterBeat = on;
+    changed();
+  },
   setFont(id) {
     settings.font = id;
     changed();
@@ -247,6 +261,8 @@ window.addEventListener('keydown', (e) => {
       return actions.setEffect('strobe', !settings.strobe);
     case 'x':
       return actions.setEffect('glitch', !settings.glitch);
+    case 'n':
+      return actions.setFilter((settings.filter + 1) % FILTERS.length);
     case 'f':
       return actions.toggleFullscreen();
     case 'h':

@@ -59,6 +59,9 @@ uniform sampler2D uText;
 uniform float uHasText;
 uniform vec4 uTextRect;
 uniform float uTextLod;
+uniform sampler2D uPrev;  // previous output frame (trails, freezes, datamosh)
+uniform int uFilter;      // see FILTERS in render/filters.ts
+uniform float uFilterAmt;
 
 float hash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -150,6 +153,124 @@ vec3 scene(vec2 uv, float split) {
   return col;
 }
 
+float rnd(float a, float b) { return hash(vec2(a, b)); }
+
+/** Full-screen filters, step 1: where to sample the picture. */
+vec2 filterUv(vec2 uv, inout float split) {
+  float a = uFilterAmt;
+  float t = uTime;
+  float k = floor(uKick);
+  float aspect = uRes.x / uRes.y;
+
+  if (uFilter == 1) {
+    // Broken monitor: vertical roll, sync jitter, torn bands
+    float slot = floor(t * 4.0);
+    if (rnd(slot, 1.0) > 1.0 - 0.3 * a) uv.y = fract(uv.y + rnd(slot, 2.0) * 0.6 + t * 0.9);
+    float line = floor(uv.y * uRes.y / 3.0);
+    uv.x += (rnd(line, floor(t * 30.0)) - 0.5) * 0.006 * a;
+    float band = floor(uv.y * 14.0);
+    if (rnd(band, floor(t * 9.0)) > 1.0 - 0.18 * a) uv.x += (rnd(band + 9.0, floor(t * 9.0)) - 0.5) * 0.35 * a;
+    split += (0.004 + 0.012 * uPulse) * a;
+  } else if (uFilter == 2) {
+    // VHS: wobble, line noise, a tracking band drifting up
+    uv.x += sin(uv.y * 40.0 + t * 3.0) * 0.0012 * a;
+    float line = floor(uv.y * uRes.y / 2.0);
+    uv.x += (rnd(line, floor(t * 24.0)) - 0.5) * 0.002 * a;
+    float band = 1.0 - smoothstep(0.0, 0.04, abs(uv.y - fract(t * 0.07)));
+    uv.x += band * (rnd(line, floor(t * 30.0)) - 0.5) * 0.08 * a;
+    split += 0.003 * a;
+  } else if (uFilter == 3) {
+    // Datamosh, step 1: whole macroblocks jump on the beat
+    vec2 block = floor(uv * vec2(24.0, 14.0));
+    if (rnd(dot(block, vec2(1.0, 57.0)), k) > 1.0 - 0.25 * a) {
+      uv += (vec2(rnd(block.x, k + 3.0), rnd(block.y, k + 5.0)) - 0.5) * 0.06 * a;
+    }
+  } else if (uFilter == 4) {
+    // Shake: kick punches zoom, offset and a little rotation
+    float p = uPulse * uPulse;
+    vec2 off = (vec2(rnd(k, 1.0), rnd(k, 2.0)) - 0.5) * 0.06 * a * p;
+    float zoom = 1.0 + (0.1 * p + 0.04 * uBass) * a;
+    float ang = (rnd(k, 3.0) - 0.5) * 0.08 * a * p;
+    vec2 q = (uv - 0.5) * vec2(aspect, 1.0);
+    q = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * q / zoom;
+    uv = q / vec2(aspect, 1.0) + 0.5 + off;
+    split += 0.006 * a * p;
+  } else if (uFilter == 5) {
+    // Kaleidoscope: mirrored wedges, slowly turning
+    vec2 q = (uv - 0.5) * vec2(aspect, 1.0);
+    float seg = 6.28318 / floor(4.0 + a * 8.0);
+    float ang = mod(atan(q.y, q.x) + t * 0.15, seg);
+    ang = abs(ang - seg * 0.5);
+    q = vec2(cos(ang), sin(ang)) * length(q) * (1.0 - 0.08 * uPulse);
+    uv = q / vec2(aspect, 1.0) + 0.5;
+  } else if (uFilter == 6) {
+    // Pixelate: big pixels, even bigger on the kick
+    float cell = mix(4.0, 28.0, a) * (1.0 + uPulse * 0.5);
+    uv = (floor(uv * uRes / cell) + 0.5) * cell / uRes;
+  }
+  return uv;
+}
+
+/** Full-screen filters, step 2: change the colors. suv is the untouched screen position. */
+vec3 filterColor(vec3 col, vec2 suv) {
+  float a = uFilterAmt;
+  float t = uTime;
+  float k = floor(uKick);
+
+  if (uFilter == 1) {
+    float slot = floor(t * 4.0);
+    // The picture freezes for a moment
+    if (rnd(slot, 4.0) > 1.0 - 0.2 * a) col = textureLod(uPrev, suv, 0.0).rgb;
+    // Corrupted blocks
+    vec2 cell = floor(suv * vec2(32.0, 18.0));
+    float g = rnd(dot(cell, vec2(1.0, 91.0)), floor(t * 6.0));
+    if (g > 1.0 - 0.012 * a) {
+      vec3 junk = mix(uA, vec3(0.0, 1.0, 0.3), step(0.7, fract(g * 13.0)));
+      col = junk * hash(vec2(floor(suv.y * uRes.y / 2.0), g)) * 0.8;
+    }
+    // Rolling noise bar
+    float bar = 1.0 - smoothstep(0.0, 0.05, abs(fract(suv.y * 0.5 - t * 0.35) - 0.5));
+    col = mix(col, vec3(hash(suv * uRes + t)), bar * 0.5 * a);
+    // Signal loss
+    if (rnd(slot, 3.0) > 1.0 - 0.06 * a) col *= 0.05;
+    col *= 0.9 + 0.1 * sin(suv.y * uRes.y * 1.5 + t * 50.0);
+  } else if (uFilter == 2) {
+    col = mix(col, vec3(luma(col)), 0.35 * a);
+    col = col * vec3(1.05, 0.98, 0.9) + 0.03 * a;
+    col += step(1.0 - 0.002 * a, hash(floor(suv * uRes / vec2(3.0, 1.0)) + floor(t * 30.0)));
+    col *= 1.0 - 0.7 * a * dot(suv - 0.5, suv - 0.5);
+  } else if (uFilter == 3) {
+    // Datamosh, step 2: some blocks keep smearing the previous frame along a motion vector
+    vec2 block = floor(suv * vec2(24.0, 14.0));
+    vec2 mv = (vec2(rnd(block.x + block.y * 31.0, k), rnd(block.y + block.x * 17.0, k)) - 0.5) * 0.008;
+    float mosh = step(1.0 - 0.6 * a, rnd(dot(block, vec2(7.0, 113.0)), k + 11.0));
+    col = mix(col, textureLod(uPrev, suv + mv, 0.0).rgb, mosh * 0.85);
+    col = floor(col * 12.0) / 12.0;
+  } else if (uFilter == 6) {
+    col = floor(col * 5.0 + 0.5) / 5.0;
+  } else if (uFilter == 8) {
+    // Trails: bright things leave a fading tail
+    col = max(col, textureLod(uPrev, suv, 0.0).rgb * (0.78 + 0.18 * a));
+  } else if (uFilter == 9) {
+    // Night vision
+    col = vec3(0.15, 1.0, 0.25) * luma(col) * (1.4 + a);
+    col += (hash(suv * uRes + fract(t) * 100.0) - 0.5) * 0.25 * a;
+    col *= smoothstep(0.75, 0.45, length((suv - 0.5) * vec2(uRes.x / uRes.y, 1.0)));
+    col *= 0.85 + 0.15 * sin(suv.y * uRes.y * 2.0);
+  }
+  return col;
+}
+
+/** Halftone print: one dot per cell, dot size from the cell's brightness. */
+vec3 halftone(float split) {
+  float cell = mix(6.0, 18.0, uFilterAmt) * (1.0 + 0.3 * uPulse);
+  vec2 px = vUv * uRes;
+  vec2 center = (floor(px / cell) + 0.5) * cell;
+  vec3 col = scene(center / uRes, split);
+  float r = sqrt(luma(col)) * cell * 0.62;
+  return col * (1.0 - smoothstep(r - 1.0, r + 0.5, length(px - center))) * 1.4;
+}
+
 void main() {
   vec2 uv = vUv;
   vec2 c = uv * 2.0 - 1.0;
@@ -174,7 +295,10 @@ void main() {
     split += 0.012 * uGlitch * on;
   }
 
-  vec3 col = scene(uv, split);
+  vec2 screenUv = vUv;
+  uv = filterUv(uv, split);
+  vec3 col = uFilter == 7 ? halftone(split) : scene(uv, split);
+  col = filterColor(col, screenUv);
 
   if (uCrt > 0.5) {
     col *= 0.82 + 0.18 * sin(gl_FragCoord.y * 3.14159 * 0.5);
@@ -187,5 +311,16 @@ void main() {
 
   col = mix(col, vec3(1.0), uStrobe * 0.75);
   outColor = vec4(col, 1.0);
+}
+`;
+
+/** Copies the finished frame to the screen (the frame is also kept as next frame's uPrev). */
+export const COPY_FRAG = /* glsl */ `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+uniform sampler2D uSrc;
+void main() {
+  outColor = textureLod(uSrc, vUv, 0.0);
 }
 `;

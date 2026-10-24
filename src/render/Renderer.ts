@@ -3,7 +3,7 @@ import { hexToRgb } from '../modes/palettes';
 import type { Mode, Palette, View } from '../modes/types';
 import type { OverlayImage } from '../overlay/image';
 import type { Settings } from '../settings';
-import { FULLSCREEN_VERT, POST_FRAG, SHARED_UNIFORMS } from './shaders';
+import { COPY_FRAG, FULLSCREEN_VERT, POST_FRAG, SHARED_UNIFORMS } from './shaders';
 
 /** What to draw this frame. */
 export interface Scene {
@@ -74,6 +74,11 @@ export class Renderer {
   private readonly gl: WebGL2RenderingContext;
   private readonly g2d: CanvasRenderingContext2D;
   private readonly post: Program;
+  private readonly copy: Program;
+  /** Finished frames, ping-ponged so the post pass can read the previous one */
+  private readonly outTex: WebGLTexture[];
+  private readonly outFbo: WebGLFramebuffer[];
+  private out = 0;
   private readonly modePrograms = new Map<string, Program>();
   private readonly srcTex: WebGLTexture;
   private readonly fbo: WebGLFramebuffer;
@@ -97,6 +102,7 @@ export class Renderer {
     this.gl = gl;
     this.g2d = document.createElement('canvas').getContext('2d', { alpha: false })!;
     this.post = link(gl, POST_FRAG);
+    this.copy = link(gl, COPY_FRAG);
 
     gl.bindVertexArray(gl.createVertexArray());
     this.srcTex = this.texture(gl.LINEAR);
@@ -106,6 +112,8 @@ export class Renderer {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     this.image = this.emptyOverlay();
     this.text = this.emptyOverlay();
+    this.outTex = [this.texture(gl.LINEAR), this.texture(gl.LINEAR)];
+    this.outFbo = [gl.createFramebuffer()!, gl.createFramebuffer()!];
   }
 
   private emptyOverlay(): Overlay {
@@ -200,6 +208,14 @@ export class Renderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.srcTex, 0);
+    for (let i = 0; i < 2; i++) {
+      gl.bindTexture(gl.TEXTURE_2D, this.outTex[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.outFbo[i]);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.outTex[i], 0);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.lastMode = ''; // forces mode reset
     return true;
@@ -238,7 +254,10 @@ export class Renderer {
       this.renderShader(mode.id, audio, view, scene.params);
     }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // Post pass into one output texture while reading the other (previous frame)
+    const prev = this.out;
+    this.out = 1 - this.out;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.outFbo[this.out]);
     gl.viewport(0, 0, this.width, this.height);
     const p = this.post;
     gl.useProgram(p.handle);
@@ -249,6 +268,7 @@ export class Renderer {
     };
     bind(2, this.image.tex, 'uImage');
     bind(3, this.text.tex, 'uText');
+    bind(4, this.outTex[prev], 'uPrev');
     bind(0, this.srcTex, 'uSrc'); // last, so unit 0 stays active
     gl.uniform2f(p.loc('uRes'), this.width, this.height);
     gl.uniform1f(p.loc('uTime'), time);
@@ -263,6 +283,8 @@ export class Renderer {
     // Short flash / glitch only on the peak of the beat pulse
     gl.uniform1f(p.loc('uStrobe'), fx.strobe ? Math.max(0, (audio.pulse - 0.6) / 0.4) : 0);
     gl.uniform1f(p.loc('uGlitch'), fx.glitch ? Math.max(0, (audio.pulse - 0.35) / 0.65) : 0);
+    gl.uniform1i(p.loc('uFilter'), fx.filter);
+    gl.uniform1f(p.loc('uFilterAmt'), fx.filterAmount * (fx.filterBeat ? 0.7 + 0.6 * audio.pulse : 1));
 
     const rects = this.overlayRects(fx.overlaySize, audio);
     gl.uniform1f(p.loc('uHasImage'), this.image.present ? 1 : 0);
@@ -274,6 +296,13 @@ export class Renderer {
     gl.uniform1f(p.loc('uTextLod'), this.lod(this.text, rects.text));
     gl.uniform1f(p.loc('uHasText'), this.text.present ? 1 : 0);
     gl.uniform4fv(p.loc('uTextRect'), rects.text);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.useProgram(this.copy.handle);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.outTex[this.out]);
+    gl.uniform1i(this.copy.loc('uSrc'), 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

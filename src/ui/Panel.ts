@@ -3,6 +3,7 @@ import type { SourceKind } from '../audio/AudioEngine';
 import { PALETTES } from '../modes/palettes';
 import type { Mode } from '../modes/types';
 import { FONTS } from '../overlay/text';
+import { FILTERS } from '../render/filters';
 import { type Effects, type Settings, paramValue, variantOf } from '../settings';
 import { h, icon, toggle } from './dom';
 
@@ -34,12 +35,16 @@ export interface PanelActions {
   setText(text: string): void;
   setFont(id: string): void;
   saveSettings(): void;
+  setFilter(index: number): void;
+  setFilterAmount(value: number): void;
+  setFilterBeat(on: boolean): void;
 }
 
 const TABS = [
   { id: 'sound', label: 'Zvuk', icon: 'AudioLines' },
   { id: 'mode', label: 'Režim', icon: 'Zap' },
   { id: 'look', label: 'Barvy a efekty', icon: 'Palette' },
+  { id: 'filters', label: 'Filtry', icon: 'Film' },
   { id: 'overlay', label: 'Obrázek a text', icon: 'ImagePlus' },
   { id: 'keys', label: 'Zkratky', icon: 'Keyboard' },
 ] as const;
@@ -62,6 +67,7 @@ const SHORTCUTS: [string, string][] = [
   ['G', 'zrno'],
   ['S', 'strobe na beat'],
   ['X', 'glitch na beat'],
+  ['N', 'další filtr'],
   ['Mezerník', 'přehrát / pauza souboru'],
   ['F', 'celá obrazovka'],
   ['H', 'otevřít / zavřít nastavení'],
@@ -113,6 +119,8 @@ export class Panel {
   private readonly imageStyleBtns: HTMLButtonElement[] = [];
   private readonly fontBtns = new Map<string, HTMLButtonElement>();
   private readonly removeImageBtn: HTMLButtonElement;
+  private readonly filterBtns: HTMLButtonElement[] = [];
+  private filterBeatSet: (on: boolean) => void = () => {};
   private readonly tabBtns = new Map<TabId, HTMLButtonElement>();
   private readonly tabPanels = new Map<TabId, HTMLElement>();
   private readonly closeBtn: HTMLButtonElement;
@@ -250,6 +258,22 @@ export class Panel {
 
     this.paramsCard = card('Nastavení režimu', this.paramsBox);
 
+    // Filters
+    const filters = h('div', { class: 'filter-grid' });
+    FILTERS.forEach((f, i) => {
+      const b = h(
+        'button',
+        { type: 'button', class: 'filter-btn', 'aria-pressed': 'false', onclick: () => app.setFilter(i) },
+        icon(f.icon, 20),
+        h('span', { class: 'filter-name' }, f.name),
+        h('small', {}, f.hint),
+      );
+      this.filterBtns.push(b);
+      filters.append(b);
+    });
+    const filterBeat = toggle('Silnější na kick', s.filterBeat, (on) => app.setFilterBeat(on), 'Filtr na každý kick zesílí');
+    this.filterBeatSet = filterBeat.set;
+
     const panels: Record<TabId, HTMLElement[]> = {
       sound: [
         card('Zdroj zvuku', sources, this.sourceExtra, this.status),
@@ -263,6 +287,15 @@ export class Panel {
       ],
       mode: [card('Režim', modes, h('h3', {}, 'Varianta'), this.variantBox), this.paramsCard],
       look: [h('section', { class: 'card wide' }, h('h2', {}, 'Paleta'), palettes), card('Efekty', fx)],
+      filters: [
+        h('section', { class: 'card wide' }, h('h2', {}, 'Filtr přes celý obraz'), filters),
+        card(
+          'Nastavení filtru',
+          slider('Síla', 0, 1, 0.01, s.filterAmount, (v) => app.setFilterAmount(v)),
+          filterBeat.row,
+          h('small', { class: 'hint' }, 'Filtr běží pořád přes jakýkoli režim, obrázek i text.'),
+        ),
+      ],
       overlay: [
         card(
           'Obrázek',
@@ -430,6 +463,8 @@ export class Panel {
     this.imageStyleBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.imageStyle)));
     for (const [id, b] of this.fontBtns) b.setAttribute('aria-pressed', String(id === s.font));
     this.removeImageBtn.hidden = !this.app.hasImage();
+    this.filterBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.filter)));
+    this.filterBeatSet(s.filterBeat);
 
     const mode = this.app.modes.find((m) => m.id === s.mode)!;
     if (this.chipsFor !== mode.id) {

@@ -26,6 +26,12 @@ export interface Settings extends Effects {
   overlaySize: number;
   text: string;
   font: string;
+  /** Full-screen filter index (render/filters.ts), 0 = none */
+  filter: number;
+  /** Filter strength, 0..1 */
+  filterAmount: number;
+  /** Filter gets stronger on each kick */
+  filterBeat: boolean;
 }
 
 const KEY = 'visualizer.settings.v1';
@@ -47,6 +53,9 @@ export const DEFAULTS: Settings = {
   overlaySize: 0.7,
   text: '',
   font: 'anton',
+  filter: 0,
+  filterAmount: 0.6,
+  filterBeat: true,
 };
 
 /** Keys that would reach Object.prototype when used on a plain object */
