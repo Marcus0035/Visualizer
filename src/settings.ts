@@ -32,6 +32,18 @@ export interface Settings extends Effects {
   filterAmount: number;
   /** Filter gets stronger on each kick */
   filterBeat: boolean;
+  /** Autopilot: switch modes and their settings by itself */
+  auto: boolean;
+  /** Kicks between autopilot jumps (autopilot.ts AUTO_EVERY) */
+  autoEvery: number;
+  /** What the autopilot may change */
+  autoMode: boolean;
+  autoVariant: boolean;
+  autoParams: boolean;
+  autoPalette: boolean;
+  autoFilter: boolean;
+  /** Mode ids the autopilot leaves out */
+  autoSkip: string[];
 }
 
 const KEY = 'visualizer.settings.v1';
@@ -56,6 +68,14 @@ export const DEFAULTS: Settings = {
   filter: 0,
   filterAmount: 0.6,
   filterBeat: true,
+  auto: false,
+  autoEvery: 32,
+  autoMode: true,
+  autoVariant: true,
+  autoParams: true,
+  autoPalette: false,
+  autoFilter: false,
+  autoSkip: [],
 };
 
 /** Keys that would reach Object.prototype when used on a plain object */
@@ -63,12 +83,12 @@ const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /** Keep only stored values whose type matches the default, so a corrupt entry cannot break startup. */
 export function parseSettings(raw: unknown): Settings {
-  const s: Settings = { ...DEFAULTS, variants: {}, params: {} };
+  const s: Settings = { ...DEFAULTS, variants: {}, params: {}, autoSkip: [] };
   if (!raw || typeof raw !== 'object') return s;
   const r = raw as Record<string, unknown>;
   const target = s as unknown as Record<string, unknown>;
   for (const key of Object.keys(DEFAULTS) as (keyof Settings)[]) {
-    if (key === 'variants' || key === 'params') continue;
+    if (key === 'variants' || key === 'params' || key === 'autoSkip') continue;
     const v = r[key];
     if (typeof v === typeof DEFAULTS[key] && (typeof v !== 'number' || Number.isFinite(v))) target[key] = v;
   }
@@ -87,6 +107,7 @@ export function parseSettings(raw: unknown): Settings {
       }
     }
   }
+  if (Array.isArray(r.autoSkip)) s.autoSkip = r.autoSkip.filter((id): id is string => typeof id === 'string');
   return s;
 }
 

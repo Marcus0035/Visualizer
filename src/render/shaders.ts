@@ -194,6 +194,7 @@ vec2 filterUv(vec2 uv, inout float split) {
     vec2 q = (uv - 0.5) * vec2(aspect, 1.0);
     q = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * q / zoom;
     uv = q / vec2(aspect, 1.0) + 0.5 + off;
+    uv = 1.0 - abs(1.0 - abs(uv)); // mirror at the edges instead of smearing the border
     split += 0.006 * a * p;
   } else if (uFilter == 5) {
     // Kaleidoscope: mirrored wedges, slowly turning
@@ -203,6 +204,7 @@ vec2 filterUv(vec2 uv, inout float split) {
     ang = abs(ang - seg * 0.5);
     q = vec2(cos(ang), sin(ang)) * length(q) * (1.0 - 0.08 * uPulse);
     uv = q / vec2(aspect, 1.0) + 0.5;
+    uv = 1.0 - abs(1.0 - abs(uv));
   } else if (uFilter == 6) {
     // Pixelate: big pixels, even bigger on the kick
     float cell = mix(4.0, 28.0, a) * (1.0 + uPulse * 0.5);
@@ -250,7 +252,8 @@ vec3 filterColor(vec3 col, vec2 suv) {
     col = floor(col * 5.0 + 0.5) / 5.0;
   } else if (uFilter == 8) {
     // Trails: bright things leave a fading tail
-    col = max(col, textureLod(uPrev, suv, 0.0).rgb * (0.78 + 0.18 * a));
+    // The subtraction lets dim leftovers (8-bit rounding, grain) die out too
+    col = max(col, textureLod(uPrev, suv, 0.0).rgb * min(0.9, 0.7 + 0.2 * a) - 0.015);
   } else if (uFilter == 9) {
     // Night vision
     col = vec3(0.15, 1.0, 0.25) * luma(col) * (1.4 + a);
@@ -311,16 +314,5 @@ void main() {
 
   col = mix(col, vec3(1.0), uStrobe * 0.75);
   outColor = vec4(col, 1.0);
-}
-`;
-
-/** Copies the finished frame to the screen (the frame is also kept as next frame's uPrev). */
-export const COPY_FRAG = /* glsl */ `#version 300 es
-precision highp float;
-in vec2 vUv;
-out vec4 outColor;
-uniform sampler2D uSrc;
-void main() {
-  outColor = textureLod(uSrc, vUv, 0.0);
 }
 `;

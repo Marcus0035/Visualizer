@@ -29,12 +29,15 @@ Vlastni obrazek (barvy palety, obrys, original) a text pres jakykoli rezim; pulz
 
 Filtry pres cely obraz (jako v CapCutu, bezi celou skladbu): rozbity monitor, VHS, datamosh, otresy, kaleidoskop, pixelace, rastr, stopy, nocni videni; sila a zesileni na kick.
 
-Efekty: CRT, zrno, strobe a glitch na beat. Klavesy: 1-4 rezim, V varianta, P paleta, N filtr, C/G/S/X efekty, F cela obrazovka, H nebo ozubene kolo vpravo nahore nastaveni (Esc zavre), mezernik play/pauza.
+Autopilot (ikona vpravo nahore nebo A): po 8/16/32/64 kicich sam meni rezim, variantu, nastaveni rezimu, pripadne tmavou paletu a filtr; co se meni a ktere rezimy se pouzivaji jde vybrat. R zmeni hned.
+
+Efekty: CRT, zrno, strobe a glitch na beat. Klavesy: 1-4 rezim, V varianta, P paleta, N filtr, A autopilot, R zmenit hned, C/G/S/X efekty, F cela obrazovka, H nebo ozubene kolo vpravo nahore nastaveni (Esc zavre), mezernik play/pauza.
 
 ## Struktura
 - `src/audio` - AudioEngine (zdroje, analyzery), analysis (pasma, beat, log spektrum), demo smycka
+- `src/autopilot.ts` - automaticke stridani (nahodny krok, pocitani kicku)
 - `src/modes` - rezimy (Canvas 2D nebo fragment shader), palety
 - `src/overlay` - vlastni obrazek a text (fonty Anton, Unbounded, UnifrakturMaguntia, Space Mono)
 - `src/render` - Renderer (rezim do textury, post pass s efekty a filtry, predchozi snimek pro datamosh a stopy), shadery, seznam filtru
-- `src/ui` - nastaveni jako okno pres celou obrazovku se zalozkami (Zvuk, Rezim, Barvy a efekty, Filtry, Obrazek a text, Zkratky), nastrojova lista vpravo nahore
+- `src/ui` - nastaveni jako okno pres celou obrazovku se zalozkami (Zvuk, Rezim, Barvy a efekty, Filtry, Autopilot, Obrazek a text, Zkratky), nastrojova lista vpravo nahore
 - Novy rezim: soubor v `src/modes` implementujici `Mode2D` nebo `ModeGL`, pridat do `src/modes/index.ts`; vlastni nastaveni pres `params` (GL rezim je dostane jako float uniformy)

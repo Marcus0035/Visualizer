@@ -90,6 +90,11 @@ button {
   background: rgba(40, 40, 48, 0.8);
 }
 
+.tool-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .meter {
   display: flex;
   gap: 3px;
@@ -824,4 +829,8 @@ input[type='range'] {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+#panel-auto .btn {
+  align-self: flex-start;
 }

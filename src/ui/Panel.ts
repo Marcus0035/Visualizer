@@ -2,6 +2,7 @@ import type { Bands } from '../audio/analysis';
 import type { SourceKind } from '../audio/AudioEngine';
 import { PALETTES } from '../modes/palettes';
 import type { Mode } from '../modes/types';
+import { AUTO_EVERY } from '../autopilot';
 import { FONTS } from '../overlay/text';
 import { FILTERS } from '../render/filters';
 import { type Effects, type Settings, paramValue, variantOf } from '../settings';
@@ -38,13 +39,21 @@ export interface PanelActions {
   setFilter(index: number): void;
   setFilterAmount(value: number): void;
   setFilterBeat(on: boolean): void;
+  setAuto(on: boolean): void;
+  setAutoEvery(kicks: number): void;
+  setAutoPart(key: AutoPart, on: boolean): void;
+  setAutoSkip(modeId: string, skip: boolean): void;
+  autoNow(): void;
 }
+
+export type AutoPart = 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter';
 
 const TABS = [
   { id: 'sound', label: 'Zvuk', icon: 'AudioLines' },
   { id: 'mode', label: 'Režim', icon: 'Zap' },
   { id: 'look', label: 'Barvy a efekty', icon: 'Palette' },
   { id: 'filters', label: 'Filtry', icon: 'Film' },
+  { id: 'auto', label: 'Autopilot', icon: 'Shuffle' },
   { id: 'overlay', label: 'Obrázek a text', icon: 'ImagePlus' },
   { id: 'keys', label: 'Zkratky', icon: 'Keyboard' },
 ] as const;
@@ -68,6 +77,8 @@ const SHORTCUTS: [string, string][] = [
   ['S', 'strobe na beat'],
   ['X', 'glitch na beat'],
   ['N', 'další filtr'],
+  ['A', 'autopilot zapnout / vypnout'],
+  ['R', 'autopilot: změnit hned'],
   ['Mezerník', 'přehrát / pauza souboru'],
   ['F', 'celá obrazovka'],
   ['H', 'otevřít / zavřít nastavení'],
@@ -121,6 +132,10 @@ export class Panel {
   private readonly removeImageBtn: HTMLButtonElement;
   private readonly filterBtns: HTMLButtonElement[] = [];
   private filterBeatSet: (on: boolean) => void = () => {};
+  private readonly autoBtn: HTMLButtonElement;
+  private readonly autoSetters = new Map<AutoPart | 'auto', (on: boolean) => void>();
+  private readonly autoEveryBtns = new Map<number, HTMLButtonElement>();
+  private readonly autoModeBtns = new Map<string, HTMLButtonElement>();
   private readonly tabBtns = new Map<TabId, HTMLButtonElement>();
   private readonly tabPanels = new Map<TabId, HTMLElement>();
   private readonly closeBtn: HTMLButtonElement;
@@ -148,10 +163,16 @@ export class Panel {
       { class: 'tool-btn', title: 'Nastavení (H)', 'aria-label': 'Nastavení', onclick: () => this.open() },
       icon('Settings', 18),
     );
+    this.autoBtn = h(
+      'button',
+      { class: 'tool-btn', title: 'Autopilot (A)', 'aria-label': 'Autopilot', 'aria-pressed': 'false', onclick: () => app.setAuto(!s.auto) },
+      icon('Shuffle', 18),
+    );
     this.toolbar = h(
       'div',
       { class: 'toolbar' },
       miniMeter,
+      this.autoBtn,
       h(
         'button',
         { class: 'tool-btn', title: 'Celá obrazovka (F)', 'aria-label': 'Celá obrazovka', onclick: () => app.toggleFullscreen() },
@@ -274,6 +295,36 @@ export class Panel {
     const filterBeat = toggle('Silnější na kick', s.filterBeat, (on) => app.setFilterBeat(on), 'Filtr na každý kick zesílí');
     this.filterBeatSet = filterBeat.set;
 
+    // Autopilot
+    const autoOn = toggle('Autopilot', s.auto, (on) => app.setAuto(on), 'Sám střídá režimy a jejich nastavení, vždy na kick');
+    this.autoSetters.set('auto', autoOn.set);
+    const autoEvery = h('div', { class: 'chips' });
+    for (const n of AUTO_EVERY) {
+      const b = h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', onclick: () => app.setAutoEvery(n) }, String(n));
+      this.autoEveryBtns.set(n, b);
+      autoEvery.append(b);
+    }
+    const autoParts = h('div', { class: 'switches' });
+    const partDefs: [AutoPart, string, string][] = [
+      ['autoMode', 'Režim', 'Přepíná mezi vybranými režimy'],
+      ['autoVariant', 'Varianta', 'Např. tunel, lasery, bloky'],
+      ['autoParams', 'Nastavení režimu', 'Rychlost, hustota, záblesk, jas'],
+      ['autoPalette', 'Barvy', 'Jen tmavé palety s jednou barvou'],
+      ['autoFilter', 'Filtr', 'Občas filtr přes celý obraz, občas čistý obraz'],
+    ];
+    for (const [key, label, hint] of partDefs) {
+      const t = toggle(label, s[key], (on) => app.setAutoPart(key, on), hint);
+      this.autoSetters.set(key, t.set);
+      autoParts.append(t.row);
+    }
+    const autoModes = h('div', { class: 'chips' });
+    for (const m of app.modes) {
+      const b = h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false' }, m.name);
+      b.addEventListener('click', () => app.setAutoSkip(m.id, !s.autoSkip.includes(m.id)));
+      this.autoModeBtns.set(m.id, b);
+      autoModes.append(b);
+    }
+
     const panels: Record<TabId, HTMLElement[]> = {
       sound: [
         card('Zdroj zvuku', sources, this.sourceExtra, this.status),
@@ -295,6 +346,17 @@ export class Panel {
           filterBeat.row,
           h('small', { class: 'hint' }, 'Filtr běží pořád přes jakýkoli režim, obrázek i text.'),
         ),
+      ],
+      auto: [
+        card(
+          'Autopilot',
+          autoOn.row,
+          h('div', { class: 'param-options' }, h('span', {}, 'Změna po kicích'), autoEvery),
+          h('button', { type: 'button', class: 'btn', onclick: () => app.autoNow() }, icon('Shuffle'), h('span', {}, 'Změnit hned')),
+          h('small', { class: 'hint' }, 'Bez jasného kicku mění podle času. Ruční změny fungují dál.'),
+        ),
+        card('Co se mění', autoParts),
+        card('Režimy v autopilotu', autoModes, h('small', { class: 'hint' }, 'Vypnutý režim autopilot přeskočí.')),
       ],
       overlay: [
         card(
@@ -465,6 +527,10 @@ export class Panel {
     this.removeImageBtn.hidden = !this.app.hasImage();
     this.filterBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.filter)));
     this.filterBeatSet(s.filterBeat);
+    this.autoBtn.setAttribute('aria-pressed', String(s.auto));
+    for (const [k, set] of this.autoSetters) set(s[k]);
+    for (const [n, b] of this.autoEveryBtns) b.setAttribute('aria-pressed', String(n === s.autoEvery));
+    for (const [id, b] of this.autoModeBtns) b.setAttribute('aria-pressed', String(!s.autoSkip.includes(id)));
 
     const mode = this.app.modes.find((m) => m.id === s.mode)!;
     if (this.chipsFor !== mode.id) {
@@ -500,6 +566,11 @@ export class Panel {
       this.playBtn.setAttribute('aria-label', src.playing ? 'Pauza' : 'Přehrát');
       this.playBtn.replaceChildren(icon(src.playing ? 'Pause' : 'Play'));
     }
+  }
+
+  /** Rebuild the mode settings on the next sync (their values changed from outside). */
+  refreshParams(): void {
+    this.paramsFor = '';
   }
 
   /** Sliders and option chips for the current mode's own settings. */

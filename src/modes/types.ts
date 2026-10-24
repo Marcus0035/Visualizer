@@ -9,6 +9,8 @@ export interface Palette {
   a: string;
   b: string;
   c: string;
+  /** Dark palette with one primary color (the autopilot only picks these) */
+  dark?: boolean;
 }
 
 export interface View {

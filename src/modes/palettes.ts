@@ -12,6 +12,7 @@ function dark(id: string, name: string, primary: string): Palette {
     a: primary,
     b: mixHex(primary, '#000000', 0.72),
     c: mixHex(primary, '#ffffff', 0.4),
+    dark: true,
   };
 }
 
