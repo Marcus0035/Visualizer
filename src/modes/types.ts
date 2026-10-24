@@ -24,12 +24,26 @@ export interface View {
   variant: number;
 }
 
+/** A tweakable mode setting; GL modes receive it as a float uniform named `id`. */
+export interface ModeParam {
+  id: string;
+  label: string;
+  default: number;
+  /** Slider range */
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Discrete choices shown as chips instead of a slider */
+  options?: { label: string; value: number }[];
+}
+
 interface ModeBase {
   id: string;
   name: string;
   /** Lucide icon name */
   icon: string;
   variants: string[];
+  params?: ModeParam[];
 }
 
 /** Draws with Canvas 2D; the result is uploaded to the GPU for post effects. */

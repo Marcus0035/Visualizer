@@ -6,7 +6,7 @@ import type { Mode } from './modes/types';
 import { forgetImage, loadImageFile, restoreImage } from './overlay/image';
 import { FONTS, renderText } from './overlay/text';
 import { Renderer } from './render/Renderer';
-import { type Effects, loadSettings, saveSettings, variantOf } from './settings';
+import { type Effects, loadSettings, paramValue, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
 import { Panel, type PanelActions } from './ui/Panel';
 
@@ -82,6 +82,14 @@ const actions: PanelActions = {
   },
   setVariant(i) {
     settings.variants[settings.mode] = i;
+    changed();
+  },
+  setParam(id, value) {
+    (settings.params[settings.mode] ??= {})[id] = value;
+    saveSettings(settings);
+  },
+  resetParams() {
+    delete settings.params[settings.mode];
     changed();
   },
   setPalette(id) {
@@ -287,7 +295,8 @@ function frame(now: number): void {
   try {
     const a = audio.update(dt, now);
     const mode = currentMode();
-    const scene = { mode, variant: variantOf(mode, settings), palette: currentPalette(), settings };
+    const params = Object.fromEntries((mode.params ?? []).map((p) => [p.id, paramValue(mode, p, settings)]));
+    const scene = { mode, variant: variantOf(mode, settings), palette: currentPalette(), settings, params };
     renderer.render(scene, a, (now - t0) / 1000, dt);
     panel.meter(a.bands);
   } catch (err) {

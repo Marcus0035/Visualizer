@@ -3,7 +3,7 @@ import type { SourceKind } from '../audio/AudioEngine';
 import { PALETTES } from '../modes/palettes';
 import type { Mode } from '../modes/types';
 import { FONTS } from '../overlay/text';
-import { type Effects, type Settings, variantOf } from '../settings';
+import { type Effects, type Settings, paramValue, variantOf } from '../settings';
 import { h, icon, toggle } from './dom';
 
 /** What the panel needs from the app. */
@@ -13,6 +13,8 @@ export interface PanelActions {
   source(): { kind: SourceKind | null; label: string; playing: boolean };
   setMode(id: string): void;
   setVariant(index: number): void;
+  setParam(id: string, value: number): void;
+  resetParams(): void;
   setPalette(id: string): void;
   setSensitivity(value: number): void;
   setVolume(value: number): void;
@@ -43,7 +45,6 @@ const SOURCES: { kind: SourceKind; label: string; icon: string }[] = [
 ];
 
 const SHORTCUTS: [string, string][] = [
-  ['1 - 6', 'režim'],
   ['V', 'další varianta'],
   ['P', 'další paleta'],
   ['C / G / S / X', 'CRT / zrno / strobe / glitch'],
@@ -63,6 +64,8 @@ export class Panel {
   private readonly sourceExtra = h('div', { class: 'source-extra' });
   private readonly fxSetters = new Map<keyof Effects, (on: boolean) => void>();
   private chipsFor = '';
+  private paramsFor = '';
+  private readonly paramsBox = h('div', { class: 'params' });
   private extraFor = '';
   private playBtn: HTMLButtonElement | null = null;
   private readonly imageStyleBtns: HTMLButtonElement[] = [];
@@ -200,7 +203,7 @@ export class Panel {
       'details',
       { class: 'help' },
       h('summary', {}, icon('Keyboard'), h('span', {}, 'Klávesové zkratky')),
-      h('dl', {}, ...SHORTCUTS.flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)])),
+      h('dl', {}, ...[[`1 - ${app.modes.length}`, 'režim'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)])),
     );
 
     this.el = h(
@@ -208,7 +211,7 @@ export class Panel {
       { class: 'panel', 'aria-label': 'Ovládání' },
       h('header', {}, h('h1', {}, 'Visualizer'), meter, collapse),
       section('Zdroj zvuku', sources, this.sourceExtra, this.status),
-      section('Režim', modes, this.variantBox),
+      section('Režim', modes, this.variantBox, this.paramsBox),
       section('Paleta', palettes),
       section(
         'Citlivost a hlasitost',
@@ -292,6 +295,10 @@ export class Panel {
         ),
       );
     }
+    if (this.paramsFor !== mode.id) {
+      this.paramsFor = mode.id;
+      this.renderParams(mode);
+    }
     const current = variantOf(mode, s);
     Array.from(this.variantBox.children).forEach((c, i) => c.setAttribute('aria-pressed', String(i === current)));
 
@@ -313,6 +320,51 @@ export class Panel {
       this.playBtn.setAttribute('aria-label', src.playing ? 'Pauza' : 'Přehrát');
       this.playBtn.replaceChildren(icon(src.playing ? 'Pause' : 'Play'));
     }
+  }
+
+  /** Sliders and option chips for the current mode's own settings. */
+  private renderParams(mode: Mode): void {
+    const s = this.app.settings;
+    const params = mode.params ?? [];
+    this.paramsBox.hidden = params.length === 0;
+    if (params.length === 0) return this.paramsBox.replaceChildren();
+
+    const rows = params.map((p) => {
+      const value = paramValue(mode, p, s);
+      if (p.options) {
+        const chips = h('div', { class: 'chips' });
+        for (const o of p.options) {
+          const b = h('button', { type: 'button', class: 'chip', 'aria-pressed': String(o.value === value) }, o.label);
+          b.addEventListener('click', () => {
+            this.app.setParam(p.id, o.value);
+            for (const c of chips.children) c.setAttribute('aria-pressed', String(c === b));
+          });
+          chips.append(b);
+        }
+        return h('div', { class: 'param-options' }, h('span', {}, p.label), chips);
+      }
+      return h(
+        'label',
+        { class: 'slider' },
+        h('span', {}, p.label),
+        h('input', {
+          type: 'range',
+          min: String(p.min ?? 0),
+          max: String(p.max ?? 1),
+          step: String(p.step ?? 0.01),
+          value: String(value),
+          oninput: (e: Event) => this.app.setParam(p.id, Number((e.target as HTMLInputElement).value)),
+        }),
+      );
+    });
+
+    const reset = h('button', { type: 'button', class: 'link-btn' }, 'Výchozí nastavení');
+    reset.addEventListener('click', () => {
+      this.app.resetParams();
+      this.paramsFor = '';
+      this.sync();
+    });
+    this.paramsBox.replaceChildren(h('h3', {}, `Nastavení: ${mode.name}`), ...rows, reset);
   }
 
   private async renderDevices(key: string): Promise<void> {

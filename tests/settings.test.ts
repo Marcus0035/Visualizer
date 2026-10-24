@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULTS, parseSettings, variantOf } from '../src/settings';
+import { DEFAULTS, paramValue, parseSettings, variantOf } from '../src/settings';
 import type { Mode } from '../src/modes/types';
 
 describe('parseSettings', () => {
@@ -27,5 +27,28 @@ describe('variantOf', () => {
     const mode = { id: 'm', variants: ['x', 'y'] } as Mode;
     expect(variantOf(mode, { ...DEFAULTS, variants: { m: 5 } })).toBe(1);
     expect(variantOf(mode, { ...DEFAULTS, variants: {} })).toBe(0);
+  });
+});
+
+describe('paramValue', () => {
+  const mode = {
+    id: 'm',
+    variants: ['x'],
+    params: [
+      { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3 },
+      { id: 'uEvery', label: 'Every', default: 1, options: [{ label: '1', value: 1 }, { label: '4', value: 4 }] },
+    ],
+  } as Mode;
+  const [speed, every] = mode.params!;
+
+  it('uses defaults, clamps ranges and rejects unknown options', () => {
+    expect(paramValue(mode, speed, { ...DEFAULTS })).toBe(1);
+    expect(paramValue(mode, speed, { ...DEFAULTS, params: { m: { uSpeed: 9 } } })).toBe(3);
+    expect(paramValue(mode, every, { ...DEFAULTS, params: { m: { uEvery: 4 } } })).toBe(4);
+    expect(paramValue(mode, every, { ...DEFAULTS, params: { m: { uEvery: 3 } } })).toBe(1);
+  });
+
+  it('parses nested params and drops junk', () => {
+    expect(parseSettings({ params: { m: { uSpeed: 2, bad: 'x' }, n: null } }).params).toEqual({ m: { uSpeed: 2 } });
   });
 });

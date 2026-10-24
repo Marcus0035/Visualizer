@@ -1,4 +1,4 @@
-import type { Mode } from './modes/types';
+import type { Mode, ModeParam } from './modes/types';
 export interface Effects {
   crt: boolean;
   grain: boolean;
@@ -10,6 +10,8 @@ export interface Settings extends Effects {
   mode: string;
   /** Selected variant per mode id */
   variants: Record<string, number>;
+  /** Mode settings per mode id, then per param id */
+  params: Record<string, Record<string, number>>;
   palette: string;
   /** Analysis gain, 0.25..4 */
   sensitivity: number;
@@ -28,9 +30,10 @@ export interface Settings extends Effects {
 const KEY = 'visualizer.settings.v1';
 
 export const DEFAULTS: Settings = {
-  mode: 'oscilloscope',
+  mode: 'techno',
   variants: {},
-  palette: 'neon',
+  params: {},
+  palette: 'blood',
   sensitivity: 1,
   volume: 0.6,
   inputDevice: '',
@@ -47,18 +50,26 @@ export const DEFAULTS: Settings = {
 
 /** Keep only stored values whose type matches the default, so a corrupt entry cannot break startup. */
 export function parseSettings(raw: unknown): Settings {
-  const s: Settings = { ...DEFAULTS, variants: {} };
+  const s: Settings = { ...DEFAULTS, variants: {}, params: {} };
   if (!raw || typeof raw !== 'object') return s;
   const r = raw as Record<string, unknown>;
   const target = s as unknown as Record<string, unknown>;
   for (const key of Object.keys(DEFAULTS) as (keyof Settings)[]) {
-    if (key === 'variants') continue;
+    if (key === 'variants' || key === 'params') continue;
     const v = r[key];
     if (typeof v === typeof DEFAULTS[key] && (typeof v !== 'number' || Number.isFinite(v))) target[key] = v;
   }
   if (r.variants && typeof r.variants === 'object') {
     for (const [id, v] of Object.entries(r.variants)) {
       if (Number.isInteger(v) && (v as number) >= 0) s.variants[id] = v as number;
+    }
+  }
+  if (r.params && typeof r.params === 'object') {
+    for (const [mode, values] of Object.entries(r.params)) {
+      if (!values || typeof values !== 'object') continue;
+      for (const [id, v] of Object.entries(values)) {
+        if (typeof v === 'number' && Number.isFinite(v)) (s.params[mode] ??= {})[id] = v;
+      }
     }
   }
   return s;
@@ -77,6 +88,14 @@ export function loadSettings(): Settings {
 /** Selected variant of a mode, clamped to the variants it has. */
 export function variantOf(mode: Mode, s: Settings): number {
   return Math.min(s.variants[mode.id] ?? 0, mode.variants.length - 1);
+}
+
+/** Value of one mode setting: stored value clamped to its range or options, else the default. */
+export function paramValue(mode: Mode, p: ModeParam, s: Settings): number {
+  const v = s.params[mode.id]?.[p.id];
+  if (v === undefined) return p.default;
+  if (p.options) return p.options.some((o) => o.value === v) ? v : p.default;
+  return Math.min(p.max ?? Infinity, Math.max(p.min ?? -Infinity, v));
 }
 
 export function saveSettings(s: Settings): void {

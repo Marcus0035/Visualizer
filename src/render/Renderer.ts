@@ -11,6 +11,8 @@ export interface Scene {
   variant: number;
   palette: Palette;
   settings: Settings;
+  /** Resolved mode settings by uniform name (see ModeParam) */
+  params: Record<string, number>;
 }
 
 interface Overlay {
@@ -86,6 +88,8 @@ export class Renderer {
   private lastMode = '';
   private phase = 0;
   private kicks = 0;
+  /** Mode time scaled by the mode's uSpeed setting, so changing speed never jumps */
+  private clock = 0;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
@@ -213,7 +217,9 @@ export class Renderer {
     const gl = this.gl;
     const { mode, variant, palette, settings: fx } = scene;
     const view: View = { width: this.width, height: this.height, dpr: this.dpr, time, dt, palette, variant };
-    this.phase += dt * (0.25 + audio.bands.bass * 1.6 + audio.pulse * 0.6);
+    const speed = scene.params.uSpeed ?? 1;
+    this.phase += dt * speed * (0.25 + audio.bands.bass * 1.6 + audio.pulse * 0.6);
+    this.clock += dt * speed;
     if (audio.beat) this.kicks++;
 
     const modeKey = `${mode.id}:${variant}`;
@@ -229,7 +235,7 @@ export class Renderer {
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.g2d.canvas);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     } else {
-      this.renderShader(mode.id, audio, view);
+      this.renderShader(mode.id, audio, view, scene.params);
     }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -271,7 +277,7 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  private renderShader(id: string, a: AudioFrame, v: View): void {
+  private renderShader(id: string, a: AudioFrame, v: View, params: Record<string, number>): void {
     const gl = this.gl;
     const p = this.modePrograms.get(id);
     if (!p) throw new Error(`Mode ${id} was not prepared`);
@@ -287,8 +293,9 @@ export class Renderer {
     gl.useProgram(p.handle);
     gl.uniform1i(p.loc('uSpectrum'), 1);
     gl.uniform2f(p.loc('uRes'), v.width, v.height);
-    gl.uniform1f(p.loc('uTime'), v.time);
+    gl.uniform1f(p.loc('uTime'), this.clock);
     gl.uniform1f(p.loc('uPhase'), this.phase);
+    for (const [name, value] of Object.entries(params)) gl.uniform1f(p.loc(name), value);
     gl.uniform1f(p.loc('uBass'), a.bands.bass);
     gl.uniform1f(p.loc('uMid'), a.bands.mid);
     gl.uniform1f(p.loc('uTreble'), a.bands.treble);

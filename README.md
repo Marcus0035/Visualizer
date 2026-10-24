@@ -17,17 +17,17 @@ npm run build    # produkcni build do dist/
 - Soubor: tlacitko nebo drag and drop
 - Karta: sdileny zvuk karty prohlizece (Chromium)
 
-## Rezimy (verze 0.1)
-1. Osciloskop - vlna, stereo XY, kruh
-2. Spektrum - sloupce, zrcadlo, minimal (60. leta)
+## Rezimy
+1. Techno - tunel, lasery, bloky, industrial (vse se prepina na kick); nastaveni rychlost, hustota, zablesk, jas, zmena vzoru po 1/2/4/8 kicich
+2. Osciloskop - vlna, stereo XY, kruh
 3. Plasma - tekuta, svetelne tyce (shader)
 4. Matrix - znaky, binarni
-5. Interstellar - hvezdne pole, warp
-6. Techno - tunel, lasery, bloky, industrial (vse se prepina na kick)
+
+Palety: 8 tmavych s jednou hlavni barvou (Krev, Jed, Ultrafialova, Kobalt, Ohen, Tyrkys, Magenta, Zlato) + 7 puvodnich.
 
 Vlastni obrazek (barvy palety, obrys, original) a text pres jakykoli rezim; pulzuji s basy, text se na beat trha.
 
-Efekty: CRT, zrno, strobe a glitch na beat. Klavesy: 1-6 rezim, V varianta, P paleta, C/G/S/X efekty, F cela obrazovka, H panel, mezernik play/pauza.
+Efekty: CRT, zrno, strobe a glitch na beat. Klavesy: 1-4 rezim, V varianta, P paleta, C/G/S/X efekty, F cela obrazovka, H panel, mezernik play/pauza.
 
 ## Struktura
 - `src/audio` - AudioEngine (zdroje, analyzery), analysis (pasma, beat, log spektrum), demo smycka
@@ -35,4 +35,4 @@ Efekty: CRT, zrno, strobe a glitch na beat. Klavesy: 1-6 rezim, V varianta, P pa
 - `src/overlay` - vlastni obrazek a text (fonty Anton, Unbounded, UnifrakturMaguntia, Space Mono)
 - `src/render` - Renderer (rezim do textury, post pass s efekty), shadery
 - `src/ui` - panel ovladani
-- Novy rezim: soubor v `src/modes` implementujici `Mode2D` nebo `ModeGL`, pridat do `src/modes/index.ts`
+- Novy rezim: soubor v `src/modes` implementujici `Mode2D` nebo `ModeGL`, pridat do `src/modes/index.ts`; vlastni nastaveni pres `params` (GL rezim je dostane jako float uniformy)
