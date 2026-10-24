@@ -43,6 +43,7 @@ const currentPalette = () => PALETTES.find((p) => p.id === settings.palette)!;
 
 let hasImage = false;
 let textJob = 0;
+let imageJob = 0;
 
 /** Re-render the overlay text; only the latest request wins. */
 async function updateText(): Promise<void> {
@@ -52,12 +53,15 @@ async function updateText(): Promise<void> {
 }
 
 async function useImage(file: File): Promise<void> {
+  const job = ++imageJob;
   try {
-    renderer.setImage(await loadImageFile(file));
+    const { image, saved } = await loadImageFile(file);
+    if (job !== imageJob) return;
+    renderer.setImage(image);
     hasImage = true;
-    panel.setStatus('');
+    panel.setStatus(saved ? '' : 'Obrázek je moc velký na uložení, po restartu zmizí.');
   } catch {
-    panel.setStatus('Obrázek nejde načíst.', true);
+    if (job === imageJob) panel.setStatus('Obrázek nejde načíst.', true);
   }
   panel.sync();
 }
@@ -114,6 +118,7 @@ const actions: PanelActions = {
   hasImage: () => hasImage,
   pickImage: () => imageInput.click(),
   removeImage() {
+    imageJob++;
     renderer.setImage(null);
     forgetImage();
     hasImage = false;
@@ -144,8 +149,9 @@ document.body.append(panel.el, panel.opener);
 audio.onchange = () => panel.sync();
 changed();
 void updateText();
+const restoreJob = ++imageJob;
 void restoreImage().then((img) => {
-  if (!img || hasImage) return;
+  if (!img || restoreJob !== imageJob) return;
   renderer.setImage(img);
   hasImage = true;
   panel.sync();

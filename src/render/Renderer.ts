@@ -119,7 +119,9 @@ export class Renderer {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, o.tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.generateMipmap(gl.TEXTURE_2D);
     o.width = source.width;
@@ -134,6 +136,12 @@ export class Renderer {
   /** White-on-transparent text canvas, or null to hide the text. */
   setText(canvas: HTMLCanvasElement | null): void {
     this.upload(this.text, canvas, true);
+  }
+
+  /** Mip level matching how much the overlay is shrunk on screen. */
+  private lod(o: Overlay, rect: number[]): number {
+    const shownPx = rect[2] * 2 * this.width;
+    return Math.max(0, Math.log2(o.width / Math.max(1, shownPx)));
   }
 
   /**
@@ -256,6 +264,8 @@ export class Renderer {
     gl.uniform1i(p.loc('uImageStyle'), fx.imageStyle);
     gl.uniform4fv(p.loc('uImageRect'), rects.image);
     gl.uniform2f(p.loc('uImageTexel'), 1 / this.image.width, 1 / this.image.height);
+    gl.uniform1f(p.loc('uImageLod'), this.lod(this.image, rects.image));
+    gl.uniform1f(p.loc('uTextLod'), this.lod(this.text, rects.text));
     gl.uniform1f(p.loc('uHasText'), this.text.present ? 1 : 0);
     gl.uniform4fv(p.loc('uTextRect'), rects.text);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

@@ -18,6 +18,8 @@ export const FONTS: OverlayFont[] = [
 ];
 
 const SIZE = 200;
+/** Stay well below MAX_TEXTURE_SIZE, otherwise the upload fails silently */
+const MAX_WIDTH = 8192;
 
 /** White text on transparent background; the shader colors it from the palette. */
 export async function renderText(text: string, fontId: string): Promise<HTMLCanvasElement | null> {
@@ -28,19 +30,22 @@ export async function renderText(text: string, fontId: string): Promise<HTMLCanv
   if (lines.length === 0) return null;
 
   const font = FONTS.find((f) => f.id === fontId) ?? FONTS[0];
-  const css = `${font.weight} ${SIZE}px "${font.family}"`;
+  const cssAt = (px: number) => `${font.weight} ${px}px "${font.family}"`;
   try {
-    await document.fonts.load(css, text);
+    await document.fonts.load(cssAt(SIZE), text);
   } catch {
     // Falls back to a system font
   }
 
   const canvas = document.createElement('canvas');
   const g = canvas.getContext('2d')!;
-  g.font = css;
-  const pad = SIZE * 0.25;
-  const lineH = SIZE * 1.15;
-  const width = Math.max(...lines.map((l) => g.measureText(l).width));
+  g.font = cssAt(SIZE);
+  const widest = Math.max(...lines.map((l) => g.measureText(l).width));
+  const size = Math.min(SIZE, Math.floor((SIZE * MAX_WIDTH) / (widest * 1.6)));
+  const css = cssAt(size);
+  const pad = size * 0.25;
+  const lineH = size * 1.15;
+  const width = (widest * size) / SIZE;
   canvas.width = Math.ceil(width + pad * 2);
   canvas.height = Math.ceil(lineH * lines.length + pad * 2);
 

@@ -54,9 +54,11 @@ uniform float uImageAlpha;
 uniform int uImageStyle;
 uniform vec4 uImageRect;  // center xy, half size zw (uv units)
 uniform vec2 uImageTexel;
+uniform float uImageLod;  // explicit mip level: implicit derivatives break in branches and glitch slices
 uniform sampler2D uText;
 uniform float uHasText;
 uniform vec4 uTextRect;
+uniform float uTextLod;
 
 float hash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -68,16 +70,19 @@ vec2 local(vec2 uv, vec4 r) { return (uv - r.xy) / (2.0 * r.zw) + 0.5; }
 bool inside(vec2 t) { return t.x >= 0.0 && t.x <= 1.0 && t.y >= 0.0 && t.y <= 1.0; }
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 
+// Overlay textures are uploaded premultiplied (no dark fringes on logos); undo it for color math
+vec3 straight(vec4 s) { return s.rgb / max(s.a, 1e-4); }
+
 float imageLuma(vec2 t) {
-  vec4 s = texture(uImage, t);
-  return uImageAlpha > 0.5 ? s.a * (0.5 + 0.5 * luma(s.rgb)) : luma(s.rgb);
+  vec4 s = textureLod(uImage, t, uImageLod);
+  return uImageAlpha > 0.5 ? s.a * (0.5 + 0.5 * luma(straight(s))) : luma(s.rgb);
 }
 
 // Premultiplied color + alpha of the user image
 vec4 imageLayer(vec2 uv) {
   vec2 t = local(uv, uImageRect);
   if (!inside(t)) return vec4(0.0);
-  vec4 s = texture(uImage, t);
+  vec4 s = textureLod(uImage, t, uImageLod);
   float edge = min(min(t.x, 1.0 - t.x), min(t.y, 1.0 - t.y));
   // Photos fade out towards the edges (per axis, so the corners stay round instead of creased)
   vec2 fx = smoothstep(0.0, 0.12, t) * smoothstep(0.0, 0.12, 1.0 - t);
@@ -86,7 +91,7 @@ vec4 imageLayer(vec2 uv) {
 
   if (uImageStyle == 1) {
     // Glowing outline (Sobel on brightness)
-    vec2 d = uImageTexel * 1.5;
+    vec2 d = uImageTexel * 1.5 * exp2(uImageLod);
     float tl = imageLuma(t + vec2(-d.x, d.y)), tc = imageLuma(t + vec2(0.0, d.y)), tr = imageLuma(t + d);
     float ml = imageLuma(t - vec2(d.x, 0.0)), mr = imageLuma(t + vec2(d.x, 0.0));
     float bl = imageLuma(t - d), bc = imageLuma(t - vec2(0.0, d.y)), br = imageLuma(t + vec2(d.x, -d.y));
@@ -97,11 +102,17 @@ vec4 imageLayer(vec2 uv) {
     return vec4(col, e * 0.6);
   }
 
-  float l = luma(s.rgb);
+  vec3 rgb = straight(s);
+  float l = luma(rgb);
   vec3 col = uImageStyle == 0
     ? (l < 0.5 ? mix(uBg, uA, l * 2.0) : mix(uA, uC, l * 2.0 - 1.0))
-    : s.rgb;
+    : rgb;
   return vec4(col * boost * mask, mask);
+}
+
+float textAlpha(vec2 uv) {
+  vec2 t = local(uv, uTextRect);
+  return inside(t) ? textureLod(uText, t, uTextLod).a : 0.0;
 }
 
 // Premultiplied text with palette glow; bands slip sideways on the beat
@@ -111,22 +122,23 @@ vec4 textLayer(vec2 uv) {
   float slip = step(0.75, hash(vec2(band, k))) * uPulse * uPulse;
   uv.x += (hash(vec2(band, k + 7.0)) - 0.5) * 0.06 * slip;
 
-  vec2 t = local(uv, uTextRect);
-  float a = inside(t) ? texture(uText, t).a : 0.0;
+  float a = textAlpha(uv);
   float glow = 0.0;
   vec2 r = vec2(uRes.y / uRes.x, 1.0) * (0.008 + 0.01 * uPulse);
   for (int i = 0; i < 8; i++) {
     float ang = float(i) * 0.785398;
-    vec2 tt = local(uv + vec2(cos(ang), sin(ang)) * r, uTextRect);
-    if (inside(tt)) glow += texture(uText, tt).a;
+    glow += textAlpha(uv + vec2(cos(ang), sin(ang)) * r);
   }
   glow /= 8.0;
   vec3 col = uC * a + uA * glow * (1.0 - a) * (1.0 + uBass);
   return vec4(col, max(a, glow * 0.5));
 }
 
-vec3 scene(vec2 uv) {
-  vec3 col = texture(uSrc, uv).rgb;
+/** Mode image (with optional RGB split) under the overlays; overlays are sampled once. */
+vec3 scene(vec2 uv, float split) {
+  vec3 col = split > 0.0
+    ? vec3(textureLod(uSrc, uv + vec2(split, 0.0), 0.0).r, textureLod(uSrc, uv, 0.0).g, textureLod(uSrc, uv - vec2(split, 0.0), 0.0).b)
+    : textureLod(uSrc, uv, 0.0).rgb;
   if (uHasImage > 0.5) {
     vec4 l = imageLayer(uv);
     col = col * (1.0 - l.a) + l.rgb;
@@ -162,9 +174,7 @@ void main() {
     split += 0.012 * uGlitch * on;
   }
 
-  vec3 col = split > 0.0
-    ? vec3(scene(uv + vec2(split, 0.0)).r, scene(uv).g, scene(uv - vec2(split, 0.0)).b)
-    : scene(uv);
+  vec3 col = scene(uv, split);
 
   if (uCrt > 0.5) {
     col *= 0.82 + 0.18 * sin(gl_FragCoord.y * 3.14159 * 0.5);
