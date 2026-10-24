@@ -3,7 +3,7 @@ import type { SourceKind } from '../audio/AudioEngine';
 import { PALETTES } from '../modes/palettes';
 import type { Mode } from '../modes/types';
 import type { Effects } from '../render/Renderer';
-import type { Settings } from '../settings';
+import { type Settings, variantOf } from '../settings';
 import { h, icon, toggle } from './dom';
 
 /** What the panel needs from the app. */
@@ -53,6 +53,9 @@ export class Panel {
   private readonly variantBox = h('div', { class: 'chips' });
   private readonly sourceExtra = h('div', { class: 'source-extra' });
   private readonly fxSetters = new Map<keyof Effects, (on: boolean) => void>();
+  private chipsFor = '';
+  private extraFor = '';
+  private playBtn: HTMLButtonElement | null = null;
 
   constructor(private readonly app: PanelActions) {
     const s = app.settings;
@@ -186,6 +189,7 @@ export class Panel {
 
   setOpen(open: boolean): void {
     this.app.settings.panelOpen = open;
+    this.el.inert = !open; // keep focus and Space out of the hidden panel
     document.body.classList.toggle('panel-closed', !open);
   }
 
@@ -203,7 +207,7 @@ export class Panel {
     this.meters.forEach((m, i) => (m.style.transform = `scaleY(${Math.min(1, v[i] * 1.4).toFixed(3)})`));
   }
 
-  /** Refresh pressed states and the source-specific controls. */
+  /** Refresh pressed states; rebuild variant chips and source controls only when they change. */
   sync(): void {
     const s = this.app.settings;
     const src = this.app.source();
@@ -213,34 +217,40 @@ export class Panel {
     for (const [k, set] of this.fxSetters) set(s[k]);
 
     const mode = this.app.modes.find((m) => m.id === s.mode)!;
-    const current = s.variants[mode.id] ?? 0;
-    this.variantBox.replaceChildren(
-      ...mode.variants.map((name, i) =>
-        h('button', { type: 'button', class: 'chip', 'aria-pressed': String(i === current), onclick: () => this.app.setVariant(i) }, name),
-      ),
-    );
-
-    this.sourceExtra.replaceChildren();
-    if (src.kind === 'file') {
-      this.sourceExtra.append(
-        h(
-          'div',
-          { class: 'file-row' },
-          h(
-            'button',
-            { class: 'icon-btn', 'aria-label': src.playing ? 'Pauza' : 'Přehrát', onclick: () => this.app.togglePlay() },
-            icon(src.playing ? 'Pause' : 'Play'),
-          ),
-          h('span', { class: 'file-name', title: src.label }, src.label),
+    if (this.chipsFor !== mode.id) {
+      this.chipsFor = mode.id;
+      this.variantBox.replaceChildren(
+        ...mode.variants.map((name, i) =>
+          h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', onclick: () => this.app.setVariant(i) }, name),
         ),
       );
-    } else if (src.kind === 'input') {
-      void this.renderDevices();
+    }
+    const current = variantOf(mode, s);
+    Array.from(this.variantBox.children).forEach((c, i) => c.setAttribute('aria-pressed', String(i === current)));
+
+    const extraKey = `${src.kind}:${src.label}`;
+    if (this.extraFor !== extraKey) {
+      this.extraFor = extraKey;
+      this.playBtn = null;
+      this.sourceExtra.replaceChildren();
+      if (src.kind === 'file') {
+        this.playBtn = h('button', { class: 'icon-btn', onclick: () => this.app.togglePlay() });
+        this.sourceExtra.append(
+          h('div', { class: 'file-row' }, this.playBtn, h('span', { class: 'file-name', title: src.label }, src.label)),
+        );
+      } else if (src.kind === 'input') {
+        void this.renderDevices(extraKey);
+      }
+    }
+    if (this.playBtn) {
+      this.playBtn.setAttribute('aria-label', src.playing ? 'Pauza' : 'Přehrát');
+      this.playBtn.replaceChildren(icon(src.playing ? 'Pause' : 'Play'));
     }
   }
 
-  private async renderDevices(): Promise<void> {
+  private async renderDevices(key: string): Promise<void> {
     const devices = await this.app.listInputs();
+    if (this.extraFor !== key) return; // source changed meanwhile
     const select = h(
       'select',
       {

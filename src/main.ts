@@ -4,7 +4,7 @@ import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode } from './modes/types';
 import { type Effects, Renderer } from './render/Renderer';
-import { loadSettings, saveSettings } from './settings';
+import { loadSettings, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
 import { Panel, type PanelActions } from './ui/Panel';
 
@@ -25,12 +25,15 @@ try {
   throw err;
 }
 
+// GPU reset (driver crash, suspend): simplest full recovery is a reload once the context is back
+canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
+canvas.addEventListener('webglcontextrestored', () => location.reload());
+
 const audio = new AudioEngine();
 audio.sensitivity = settings.sensitivity;
 audio.volume = settings.volume;
 
 const currentMode = (): Mode => MODES.find((m) => m.id === settings.mode)!;
-const variantOf = (m: Mode) => Math.min(settings.variants[m.id] ?? 0, m.variants.length - 1);
 
 const currentPalette = () => PALETTES.find((p) => p.id === settings.palette)!;
 
@@ -70,16 +73,14 @@ const actions: PanelActions = {
   },
   useDemo: () => audio.useDemo(),
   async useInput(deviceId) {
-    await audio.useInput(deviceId || undefined);
-    settings.inputDevice = deviceId;
+    const used = await audio.useInput(deviceId || undefined);
+    if (!used) return; // superseded by another source
+    settings.inputDevice = used;
     saveSettings(settings);
   },
   useTab: () => audio.useTab(),
   pickFile: () => fileInput.click(),
-  togglePlay() {
-    audio.togglePlay();
-    panel.sync();
-  },
+  togglePlay: () => audio.togglePlay(),
   listInputs: () => audio.listInputs(),
   toggleFullscreen() {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -89,7 +90,13 @@ const actions: PanelActions = {
 
 const panel = new Panel(actions);
 document.body.append(panel.el, panel.opener);
+audio.onchange = () => panel.sync();
 changed();
+
+// A mouse click should not leave the button focused, otherwise Space presses it again
+document.addEventListener('click', (e) => {
+  if (e.detail > 0) (e.target as HTMLElement).closest('button')?.blur();
+});
 
 async function playFile(file: File): Promise<void> {
   try {
@@ -119,21 +126,27 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   document.body.classList.remove('dragging');
   const file = e.dataTransfer?.files[0];
-  if (file) void playFile(file);
+  // Before the start click the AudioContext cannot run yet
+  if (file && !start.isConnected) void playFile(file);
 });
 
 window.addEventListener('keydown', (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
   const target = e.target as HTMLElement;
   if (target.matches('input, select, textarea')) return;
 
-  const n = Number(e.key);
-  if (n >= 1 && n <= MODES.length) return actions.setMode(MODES[n - 1].id);
+  // Physical digit keys, so the Czech layout (+ e s c r) works without Shift
+  const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
+  if (digit) {
+    const n = Number(digit[1]);
+    if (n >= 1 && n <= MODES.length) actions.setMode(MODES[n - 1].id);
+    return;
+  }
 
   switch (e.key.toLowerCase()) {
     case 'v': {
       const m = currentMode();
-      return actions.setVariant((variantOf(m) + 1) % m.variants.length);
+      return actions.setVariant((variantOf(m, settings) + 1) % m.variants.length);
     }
     case 'p': {
       const i = PALETTES.findIndex((p) => p.id === settings.palette);
@@ -192,13 +205,19 @@ document.body.append(start);
 
 let last = performance.now();
 const t0 = last;
+let reported = false;
 function frame(now: number): void {
+  requestAnimationFrame(frame); // first, so one failing frame cannot stop the loop
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  const a = audio.update(dt, now);
-  const mode = currentMode();
-  renderer.render(mode, a, (now - t0) / 1000, dt, currentPalette(), variantOf(mode), settings);
-  panel.meter(a.bands);
-  requestAnimationFrame(frame);
+  try {
+    const a = audio.update(dt, now);
+    const mode = currentMode();
+    renderer.render(mode, a, (now - t0) / 1000, dt, currentPalette(), variantOf(mode, settings), settings);
+    panel.meter(a.bands);
+  } catch (err) {
+    if (!reported) console.error(err);
+    reported = true;
+  }
 }
 requestAnimationFrame(frame);

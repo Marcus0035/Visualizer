@@ -22,6 +22,11 @@ export interface AudioFrame {
   pulse: number;
 }
 
+interface Attachment {
+  stream?: MediaStream;
+  media?: HTMLAudioElement;
+}
+
 const FFT_SIZE = 2048;
 const MIN_DB = -90;
 const MAX_DB = -10;
@@ -29,6 +34,8 @@ const MAX_DB = -10;
 export class AudioEngine {
   readonly ctx = new AudioContext();
   readonly frame: AudioFrame;
+  /** Called when the source changes on its own (track ended, media paused/resumed). */
+  onchange: () => void = () => {};
 
   private readonly input = this.ctx.createGain(); // sensitivity, feeds analysis only
   private readonly monitor = this.ctx.createGain(); // what reaches the speakers
@@ -42,6 +49,8 @@ export class AudioEngine {
   private stream: MediaStream | null = null;
   private media: HTMLAudioElement | null = null;
   private demoBuffer: AudioBuffer | null = null;
+  /** Bumped by every source request; a request that finishes after a newer one gives up. */
+  private generation = 0;
 
   kind: SourceKind | null = null;
   /** Name shown in the UI (file name, device label) */
@@ -87,7 +96,9 @@ export class AudioEngine {
   }
 
   async useDemo(): Promise<void> {
+    const gen = ++this.generation;
     await this.resume();
+    if (gen !== this.generation) return;
     this.demoBuffer ??= renderDemoLoop(this.ctx);
     const node = this.ctx.createBufferSource();
     node.buffer = this.demoBuffer;
@@ -96,56 +107,95 @@ export class AudioEngine {
     node.start();
   }
 
-  /** Microphone, line-in or a PipeWire/Pulse monitor source (system output). */
-  async useInput(deviceId?: string): Promise<void> {
+  /**
+   * Microphone, line-in or a PipeWire/Pulse monitor source (system output).
+   * Falls back to the default input when the saved device is gone.
+   * Returns the id of the device actually used ('' when superseded).
+   */
+  async useInput(deviceId?: string): Promise<string> {
+    const gen = ++this.generation;
     await this.resume();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: deviceId ? { exact: deviceId } : undefined,
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-      },
-    });
+    const open = (id?: string) =>
+      navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: id ? { exact: id } : undefined,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
+    let stream: MediaStream;
+    try {
+      stream = await open(deviceId);
+    } catch (err) {
+      const name = (err as DOMException).name;
+      if (!deviceId || (name !== 'OverconstrainedError' && name !== 'NotFoundError')) throw err;
+      stream = await open();
+    }
+    if (gen !== this.generation) {
+      stream.getTracks().forEach((t) => t.stop());
+      return '';
+    }
     const track = stream.getAudioTracks()[0];
-    this.attach(this.ctx.createMediaStreamSource(stream), 'input', track?.label || 'Vstup', false);
-    this.stream = stream;
+    this.attach(this.ctx.createMediaStreamSource(stream), 'input', track?.label || 'Vstup', false, { stream });
+    return track?.getSettings().deviceId ?? '';
   }
 
   /** Audio shared from a browser tab or screen (Chromium: tab audio). */
   async useTab(): Promise<void> {
+    const gen = ++this.generation;
     await this.resume();
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    if (stream.getAudioTracks().length === 0) {
+    if (gen !== this.generation || stream.getAudioTracks().length === 0) {
       stream.getTracks().forEach((t) => t.stop());
+      if (gen !== this.generation) return;
       throw new Error('Sdílení neobsahuje zvuk. Při výběru zapni sdílení zvuku.');
     }
     // Only the audio is needed
     stream.getVideoTracks().forEach((t) => t.stop());
-    this.attach(this.ctx.createMediaStreamSource(stream), 'tab', 'Sdílený zvuk', false);
-    this.stream = stream;
+    this.attach(this.ctx.createMediaStreamSource(stream), 'tab', 'Sdílený zvuk', false, { stream });
   }
 
   async useFile(file: File): Promise<void> {
+    const gen = ++this.generation;
     await this.resume();
     const el = new Audio();
     el.src = URL.createObjectURL(file);
     el.loop = true;
-    this.attach(this.ctx.createMediaElementSource(el), 'file', file.name, true);
-    this.media = el;
-    await el.play();
+    const discard = () => {
+      URL.revokeObjectURL(el.src);
+      el.removeAttribute('src');
+    };
+    // Make sure it decodes before tearing down the current source
+    const ok = await new Promise<boolean>((resolve) => {
+      el.addEventListener('canplay', () => resolve(true), { once: true });
+      el.addEventListener('error', () => resolve(false), { once: true });
+    });
+    if (gen !== this.generation) return discard();
+    if (!ok) {
+      discard();
+      throw new Error('formát není podporovaný');
+    }
+    this.attach(this.ctx.createMediaElementSource(el), 'file', file.name, true, { media: el });
+    el.addEventListener('play', () => this.onchange());
+    el.addEventListener('pause', () => this.onchange());
+    try {
+      await el.play();
+    } catch (err) {
+      // Switched to another source while starting playback
+      if ((err as DOMException).name !== 'AbortError') throw err;
+    }
   }
 
   get playing(): boolean {
     return this.media ? !this.media.paused : this.kind !== null;
   }
 
-  /** Play/pause for file sources. Returns the new playing state. */
-  togglePlay(): boolean {
-    if (!this.media) return this.playing;
-    if (this.media.paused) void this.media.play();
+  /** Play/pause for file sources. */
+  togglePlay(): void {
+    if (!this.media) return;
+    if (this.media.paused) this.media.play().catch(() => this.onchange());
     else this.media.pause();
-    return !this.media.paused;
   }
 
   /** Labelled audio inputs; labels are empty until the user grants mic permission once. */
@@ -174,14 +224,26 @@ export class AudioEngine {
     return f;
   }
 
-  private attach(node: AudioNode, kind: SourceKind, label: string, audible: boolean): void {
+  private attach(node: AudioNode, kind: SourceKind, label: string, audible: boolean, extra: Attachment = {}): void {
     this.detach();
     node.connect(this.input);
     if (audible) node.connect(this.monitor);
     this.source = node;
     this.kind = kind;
     this.label = label;
+    this.stream = extra.stream ?? null;
+    this.media = extra.media ?? null;
     this.beats.reset();
+
+    // Stopped sharing or unplugged device: drop the dead source
+    const stream = this.stream;
+    stream?.getAudioTracks().forEach((t) =>
+      t.addEventListener('ended', () => {
+        if (this.stream !== stream) return;
+        this.detach();
+        this.onchange();
+      }),
+    );
   }
 
   private detach(): void {
@@ -191,9 +253,12 @@ export class AudioEngine {
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     if (this.media) {
-      this.media.pause();
-      URL.revokeObjectURL(this.media.src);
-      this.media = null;
+      const media = this.media;
+      this.media = null; // before pause(), so its 'pause' event sees the new state
+      media.pause();
+      URL.revokeObjectURL(media.src);
+      media.removeAttribute('src');
+      media.load();
     }
     this.kind = null;
     this.label = '';

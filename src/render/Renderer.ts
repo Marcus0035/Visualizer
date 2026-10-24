@@ -10,6 +10,8 @@ export interface Effects {
 }
 
 const SPECTRUM_SIZE = 512;
+/** Cap the render size (about 1440p) so 4K at 2x DPR does not upload huge canvases every frame. */
+const MAX_PIXELS = 2560 * 1440;
 
 class Program {
   private readonly locations = new Map<string, WebGLUniformLocation | null>();
@@ -98,7 +100,9 @@ export class Renderer {
 
   /** Match the canvas to its CSS size. Returns true when the size changed. */
   resize(): boolean {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cssPixels = this.canvas.clientWidth * this.canvas.clientHeight;
+    if (cssPixels * dpr * dpr > MAX_PIXELS) dpr = Math.sqrt(MAX_PIXELS / Math.max(1, cssPixels));
     const w = Math.max(1, Math.round(this.canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(this.canvas.clientHeight * dpr));
     if (w === this.width && h === this.height && dpr === this.dpr) return false;
