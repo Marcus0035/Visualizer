@@ -74,6 +74,7 @@ export class Renderer {
   private readonly gl: WebGL2RenderingContext;
   private readonly g2d: CanvasRenderingContext2D;
   private readonly post: Program;
+  private srcMipsOn = false;
   /** Finished frames, ping-ponged so the post pass can read the previous one */
   private readonly outTex: WebGLTexture[];
   private readonly outFbo: WebGLFramebuffer[];
@@ -219,6 +220,18 @@ export class Renderer {
     return true;
   }
 
+  /**
+   * Sample srcTex through its mipmaps (for the 2D glow) or only level 0. GL modes draw
+   * into level 0 without updating the mips, so they must not sample them.
+   */
+  private srcMips(on: boolean): void {
+    if (on === this.srcMipsOn) return;
+    this.srcMipsOn = on;
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, on ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  }
+
   /** Compile a GL mode ahead of time so switching to it does not stutter. */
   prepare(mode: Mode): void {
     if (mode.kind === 'gl' && !this.modePrograms.has(mode.id)) {
@@ -248,7 +261,10 @@ export class Renderer {
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.g2d.canvas);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      if (mode.glow) gl.generateMipmap(gl.TEXTURE_2D);
+      this.srcMips(!!mode.glow);
     } else {
+      this.srcMips(false);
       this.renderShader(mode.id, audio, view, scene.params);
     }
 
@@ -273,6 +289,7 @@ export class Renderer {
     gl.uniform1f(p.loc('uKick'), this.kicks);
     gl.uniform1f(p.loc('uPulse'), audio.pulse);
     gl.uniform1f(p.loc('uBass'), audio.bands.bass);
+    gl.uniform1f(p.loc('uSrcGlow'), mode.kind === '2d' ? (mode.glow ?? 0) : 0);
     gl.uniform3fv(p.loc('uBg'), hexToRgb(palette.bg));
     gl.uniform3fv(p.loc('uA'), hexToRgb(palette.a));
     gl.uniform3fv(p.loc('uC'), hexToRgb(palette.c));

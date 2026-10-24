@@ -73,6 +73,7 @@ export const oscilloscope: Mode2D = {
   name: 'Osciloskop',
   icon: 'Activity',
   variants: ['Vlna', 'Stereo XY', 'Kruh'],
+  glow: 1,
 
   reset(g, v) {
     g.fillStyle = v.palette.bg;
@@ -86,18 +87,15 @@ export const oscilloscope: Mode2D = {
     g.fillRect(0, 0, v.width, v.height);
     graticule(g, v);
 
+    // Only crisp strokes here; the glow is added on the GPU (see Mode2D.glow)
     tracePath(g, a, v);
     g.lineJoin = 'round';
     g.lineCap = 'round';
-    g.shadowColor = p.a;
-    g.shadowBlur = 24 * dpr;
-    g.strokeStyle = rgba(p.a, 0.45);
-    g.lineWidth = (5 + a.level * 6) * dpr;
+    g.strokeStyle = rgba(p.a, 0.7);
+    g.lineWidth = (3 + a.level * 5) * dpr;
     g.stroke();
-    g.shadowBlur = 6 * dpr;
     g.strokeStyle = p.c;
     g.lineWidth = 1.5 * dpr;
     g.stroke();
-    g.shadowBlur = 0;
   },
 };

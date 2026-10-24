@@ -36,6 +36,8 @@ precision highp float;
 in vec2 vUv;
 out vec4 outColor;
 uniform sampler2D uSrc;
+/** Glow from the blurred mip levels of uSrc (2D modes only, needs mipmaps) */
+uniform float uSrcGlow;
 uniform vec2 uRes;
 uniform float uTime;
 uniform float uCrt;
@@ -142,6 +144,11 @@ vec3 scene(vec2 uv, float split) {
   vec3 col = split > 0.0
     ? vec3(textureLod(uSrc, uv + vec2(split, 0.0), 0.0).r, textureLod(uSrc, uv, 0.0).g, textureLod(uSrc, uv - vec2(split, 0.0), 0.0).b)
     : textureLod(uSrc, uv, 0.0).rgb;
+  if (uSrcGlow > 0.0) {
+    vec3 near = max(textureLod(uSrc, uv, 2.5).rgb - uBg, 0.0);
+    vec3 far = max(textureLod(uSrc, uv, 4.5).rgb - uBg, 0.0);
+    col += (near * 1.6 + far * 3.0) * uSrcGlow;
+  }
   if (uHasImage > 0.5) {
     vec4 l = imageLayer(uv);
     col = col * (1.0 - l.a) + l.rgb;

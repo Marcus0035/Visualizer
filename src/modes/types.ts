@@ -51,6 +51,8 @@ interface ModeBase {
 /** Draws with Canvas 2D; the result is uploaded to the GPU for post effects. */
 export interface Mode2D extends ModeBase {
   kind: '2d';
+  /** Glow added on the GPU around bright strokes, 0..1 (much cheaper than canvas shadowBlur) */
+  glow?: number;
   render(g: CanvasRenderingContext2D, audio: AudioFrame, view: View): void;
   /** Called when the mode becomes active or the canvas is resized */
   reset?(g: CanvasRenderingContext2D, view: View): void;
