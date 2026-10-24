@@ -48,6 +48,9 @@ export const DEFAULTS: Settings = {
   font: 'anton',
 };
 
+/** Keys that would reach Object.prototype when used on a plain object */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /** Keep only stored values whose type matches the default, so a corrupt entry cannot break startup. */
 export function parseSettings(raw: unknown): Settings {
   const s: Settings = { ...DEFAULTS, variants: {}, params: {} };
@@ -61,13 +64,15 @@ export function parseSettings(raw: unknown): Settings {
   }
   if (r.variants && typeof r.variants === 'object') {
     for (const [id, v] of Object.entries(r.variants)) {
+      if (UNSAFE_KEYS.has(id)) continue;
       if (Number.isInteger(v) && (v as number) >= 0) s.variants[id] = v as number;
     }
   }
   if (r.params && typeof r.params === 'object') {
     for (const [mode, values] of Object.entries(r.params)) {
-      if (!values || typeof values !== 'object') continue;
+      if (UNSAFE_KEYS.has(mode) || !values || typeof values !== 'object') continue;
       for (const [id, v] of Object.entries(values)) {
+        if (UNSAFE_KEYS.has(id)) continue;
         if (typeof v === 'number' && Number.isFinite(v)) (s.params[mode] ??= {})[id] = v;
       }
     }

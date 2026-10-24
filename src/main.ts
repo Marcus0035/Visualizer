@@ -12,6 +12,10 @@ import { Panel, type PanelActions } from './ui/Panel';
 
 const settings = loadSettings();
 if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
+// Forget variants and settings of modes that no longer exist
+for (const store of [settings.variants, settings.params]) {
+  for (const id of Object.keys(store)) if (!MODES.some((m) => m.id === id)) delete store[id];
+}
 if (!PALETTES.some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
 if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
 

@@ -52,3 +52,12 @@ describe('paramValue', () => {
     expect(parseSettings({ params: { m: { uSpeed: 2, bad: 'x' }, n: null } }).params).toEqual({ m: { uSpeed: 2 } });
   });
 });
+
+describe('parseSettings prototype safety', () => {
+  it('ignores __proto__ keys', () => {
+    const s = parseSettings(JSON.parse('{"params":{"__proto__":{"uSpeed":9}},"variants":{"__proto__":1}}'));
+    expect(({} as Record<string, unknown>).uSpeed).toBeUndefined();
+    expect(Object.keys(s.params)).toEqual([]);
+    expect(Object.keys(s.variants)).toEqual([]);
+  });
+});
