@@ -35,7 +35,7 @@ export interface Settings extends Effects {
   /** Autopilot: switch modes and their settings by itself */
   auto: boolean;
   /** Kicks between autopilot jumps (autopilot.ts AUTO_EVERY) */
-  autoEvery: number;
+  autoBeats: number;
   /** What the autopilot may change */
   autoMode: boolean;
   autoVariant: boolean;
@@ -69,7 +69,7 @@ export const DEFAULTS: Settings = {
   filterAmount: 0.6,
   filterBeat: true,
   auto: false,
-  autoEvery: 32,
+  autoBeats: 1,
   autoMode: true,
   autoVariant: true,
   autoParams: true,

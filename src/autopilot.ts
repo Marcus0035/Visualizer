@@ -4,7 +4,7 @@ import type { Settings } from './settings';
 type Rnd = () => number;
 
 /** Choices for the number of kicks between jumps */
-export const AUTO_EVERY = [8, 16, 32, 64];
+export const AUTO_EVERY = [1, 2, 4, 8, 16, 32];
 
 /** Random item other than `current` (or `current` itself when there is nothing else). */
 export function pickOther<T>(items: readonly T[], current: T, rnd: Rnd): T {

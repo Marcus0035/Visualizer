@@ -40,7 +40,7 @@ export interface PanelActions {
   setFilterAmount(value: number): void;
   setFilterBeat(on: boolean): void;
   setAuto(on: boolean): void;
-  setAutoEvery(kicks: number): void;
+  setAutoBeats(kicks: number): void;
   setAutoPart(key: AutoPart, on: boolean): void;
   setAutoSkip(modeId: string, skip: boolean): void;
   autoNow(): void;
@@ -134,7 +134,7 @@ export class Panel {
   private filterBeatSet: (on: boolean) => void = () => {};
   private readonly autoBtn: HTMLButtonElement;
   private readonly autoSetters = new Map<AutoPart | 'auto', (on: boolean) => void>();
-  private readonly autoEveryBtns = new Map<number, HTMLButtonElement>();
+  private readonly autoBeatsBtns = new Map<number, HTMLButtonElement>();
   private readonly autoModeBtns = new Map<string, HTMLButtonElement>();
   private readonly tabBtns = new Map<TabId, HTMLButtonElement>();
   private readonly tabPanels = new Map<TabId, HTMLElement>();
@@ -298,11 +298,11 @@ export class Panel {
     // Autopilot
     const autoOn = toggle('Autopilot', s.auto, (on) => app.setAuto(on), 'Sám střídá režimy a jejich nastavení, vždy na kick');
     this.autoSetters.set('auto', autoOn.set);
-    const autoEvery = h('div', { class: 'chips' });
+    const autoBeats = h('div', { class: 'chips' });
     for (const n of AUTO_EVERY) {
-      const b = h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', onclick: () => app.setAutoEvery(n) }, String(n));
-      this.autoEveryBtns.set(n, b);
-      autoEvery.append(b);
+      const b = h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', onclick: () => app.setAutoBeats(n) }, String(n));
+      this.autoBeatsBtns.set(n, b);
+      autoBeats.append(b);
     }
     const autoParts = h('div', { class: 'switches' });
     const partDefs: [AutoPart, string, string][] = [
@@ -351,7 +351,7 @@ export class Panel {
         card(
           'Autopilot',
           autoOn.row,
-          h('div', { class: 'param-options' }, h('span', {}, 'Změna po kicích'), autoEvery),
+          h('div', { class: 'param-options' }, h('span', {}, 'Změna po kolika kicích'), autoBeats),
           h('button', { type: 'button', class: 'btn', onclick: () => app.autoNow() }, icon('Shuffle'), h('span', {}, 'Změnit hned')),
           h('small', { class: 'hint' }, 'Bez jasného kicku mění podle času. Ruční změny fungují dál.'),
         ),
@@ -529,7 +529,7 @@ export class Panel {
     this.filterBeatSet(s.filterBeat);
     this.autoBtn.setAttribute('aria-pressed', String(s.auto));
     for (const [k, set] of this.autoSetters) set(s[k]);
-    for (const [n, b] of this.autoEveryBtns) b.setAttribute('aria-pressed', String(n === s.autoEvery));
+    for (const [n, b] of this.autoBeatsBtns) b.setAttribute('aria-pressed', String(n === s.autoBeats));
     for (const [id, b] of this.autoModeBtns) b.setAttribute('aria-pressed', String(!s.autoSkip.includes(id)));
 
     const mode = this.app.modes.find((m) => m.id === s.mode)!;

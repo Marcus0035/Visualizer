@@ -29,7 +29,7 @@ Vlastni obrazek (barvy palety, obrys, original) a text pres jakykoli rezim; pulz
 
 Filtry pres cely obraz (jako v CapCutu, bezi celou skladbu): rozbity monitor, VHS, datamosh, otresy, kaleidoskop, pixelace, rastr, stopy, nocni videni; sila a zesileni na kick.
 
-Autopilot (ikona vpravo nahore nebo A): po 8/16/32/64 kicich sam meni rezim, variantu, nastaveni rezimu, pripadne tmavou paletu a filtr; co se meni a ktere rezimy se pouzivaji jde vybrat. R zmeni hned.
+Autopilot (ikona vpravo nahore nebo A): na kazdy kick (nebo po 2 az 32 kicich) sam meni rezim, variantu, nastaveni rezimu, pripadne tmavou paletu a filtr; co se meni a ktere rezimy se pouzivaji jde vybrat. R zmeni hned.
 
 Efekty: CRT, zrno, strobe a glitch na beat. Klavesy: 1-4 rezim, V varianta, P paleta, N filtr, A autopilot, R zmenit hned, C/G/S/X efekty, F cela obrazovka, H nebo ozubene kolo vpravo nahore nastaveni (Esc zavre), mezernik play/pauza.
 

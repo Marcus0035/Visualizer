@@ -22,7 +22,7 @@ if (!PALETTES.some((p) => p.id === settings.palette)) settings.palette = PALETTE
 if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
 if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
 settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
-if (!AUTO_EVERY.includes(settings.autoEvery)) settings.autoEvery = 32;
+if (!AUTO_EVERY.includes(settings.autoBeats)) settings.autoBeats = 1;
 
 const canvas = h('canvas', { class: 'stage' });
 const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
@@ -182,8 +182,8 @@ const actions: PanelActions = {
     autoClock.reset();
     changed();
   },
-  setAutoEvery(kicks) {
-    settings.autoEvery = kicks;
+  setAutoBeats(kicks) {
+    settings.autoBeats = kicks;
     changed();
   },
   setAutoPart(key, on) {
@@ -352,7 +352,7 @@ function frame(now: number): void {
   last = now;
   try {
     const a = audio.update(dt, now);
-    if (settings.auto && autoClock.tick(a.beat, a.level, dt, settings.autoEvery)) autoJump();
+    if (settings.auto && autoClock.tick(a.beat, a.level, dt, settings.autoBeats)) autoJump();
     const mode = currentMode();
     const params = Object.fromEntries((mode.params ?? []).map((p) => [p.id, paramValue(mode, p, settings)]));
     const scene = { mode, variant: variantOf(mode, settings), palette: currentPalette(), settings, params };
