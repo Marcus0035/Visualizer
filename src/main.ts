@@ -3,18 +3,22 @@ import { AudioEngine } from './audio/AudioEngine';
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode } from './modes/types';
-import { type Effects, Renderer } from './render/Renderer';
-import { loadSettings, saveSettings, variantOf } from './settings';
+import { forgetImage, loadImageFile, restoreImage } from './overlay/image';
+import { FONTS, renderText } from './overlay/text';
+import { Renderer } from './render/Renderer';
+import { type Effects, loadSettings, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
 import { Panel, type PanelActions } from './ui/Panel';
 
 const settings = loadSettings();
 if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
 if (!PALETTES.some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
+if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
 
 const canvas = h('canvas', { class: 'stage' });
 const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
-document.body.append(canvas, fileInput);
+const imageInput = h('input', { type: 'file', accept: 'image/*', hidden: true });
+document.body.append(canvas, fileInput, imageInput);
 
 let renderer: Renderer;
 try {
@@ -36,6 +40,27 @@ audio.volume = settings.volume;
 const currentMode = (): Mode => MODES.find((m) => m.id === settings.mode)!;
 
 const currentPalette = () => PALETTES.find((p) => p.id === settings.palette)!;
+
+let hasImage = false;
+let textJob = 0;
+
+/** Re-render the overlay text; only the latest request wins. */
+async function updateText(): Promise<void> {
+  const job = ++textJob;
+  const canvas = await renderText(settings.text, settings.font);
+  if (job === textJob) renderer.setText(canvas);
+}
+
+async function useImage(file: File): Promise<void> {
+  try {
+    renderer.setImage(await loadImageFile(file));
+    hasImage = true;
+    panel.setStatus('');
+  } catch {
+    panel.setStatus('Obrázek nejde načíst.', true);
+  }
+  panel.sync();
+}
 
 function changed(): void {
   saveSettings(settings);
@@ -86,12 +111,45 @@ const actions: PanelActions = {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen();
   },
+  hasImage: () => hasImage,
+  pickImage: () => imageInput.click(),
+  removeImage() {
+    renderer.setImage(null);
+    forgetImage();
+    hasImage = false;
+    panel.sync();
+  },
+  setImageStyle(i) {
+    settings.imageStyle = i;
+    changed();
+  },
+  setOverlaySize(v) {
+    settings.overlaySize = v;
+    saveSettings(settings);
+  },
+  setText(text) {
+    settings.text = text;
+    saveSettings(settings);
+    void updateText();
+  },
+  setFont(id) {
+    settings.font = id;
+    changed();
+    void updateText();
+  },
 };
 
 const panel = new Panel(actions);
 document.body.append(panel.el, panel.opener);
 audio.onchange = () => panel.sync();
 changed();
+void updateText();
+void restoreImage().then((img) => {
+  if (!img || hasImage) return;
+  renderer.setImage(img);
+  hasImage = true;
+  panel.sync();
+});
 
 // A mouse click should not leave the button focused, otherwise Space presses it again
 document.addEventListener('click', (e) => {
@@ -114,7 +172,13 @@ fileInput.addEventListener('change', () => {
   fileInput.value = '';
 });
 
-// Drag and drop an audio file anywhere
+imageInput.addEventListener('change', () => {
+  const file = imageInput.files?.[0];
+  if (file) void useImage(file);
+  imageInput.value = '';
+});
+
+// Drag and drop: images go to the overlay, anything else is tried as audio
 window.addEventListener('dragover', (e) => {
   e.preventDefault();
   document.body.classList.add('dragging');
@@ -126,8 +190,10 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   document.body.classList.remove('dragging');
   const file = e.dataTransfer?.files[0];
+  if (!file) return;
+  if (file.type.startsWith('image/')) void useImage(file);
   // Before the start click the AudioContext cannot run yet
-  if (file && !start.isConnected) void playFile(file);
+  else if (!start.isConnected) void playFile(file);
 });
 
 window.addEventListener('keydown', (e) => {
@@ -158,6 +224,8 @@ window.addEventListener('keydown', (e) => {
       return actions.setEffect('grain', !settings.grain);
     case 's':
       return actions.setEffect('strobe', !settings.strobe);
+    case 'x':
+      return actions.setEffect('glitch', !settings.glitch);
     case 'f':
       return actions.toggleFullscreen();
     case 'h':
@@ -213,7 +281,8 @@ function frame(now: number): void {
   try {
     const a = audio.update(dt, now);
     const mode = currentMode();
-    renderer.render(mode, a, (now - t0) / 1000, dt, currentPalette(), variantOf(mode, settings), settings);
+    const scene = { mode, variant: variantOf(mode, settings), palette: currentPalette(), settings };
+    renderer.render(scene, a, (now - t0) / 1000, dt);
     panel.meter(a.bands);
   } catch (err) {
     if (!reported) console.error(err);

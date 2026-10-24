@@ -7,6 +7,8 @@ export const PALETTES: Palette[] = [
   { id: 'sixties', name: '60. léta', bg: '#f1e4c8', a: '#e4572e', b: '#f3a712', c: '#29335c' },
   { id: 'ice', name: 'Led', bg: '#000814', a: '#48cae4', b: '#0077b6', c: '#e0fbff' },
   { id: 'mono', name: 'Mono', bg: '#000000', a: '#ffffff', b: '#7a7a7a', c: '#ffffff' },
+  { id: 'warehouse', name: 'Warehouse', bg: '#000000', a: '#ff1a1a', b: '#5a0000', c: '#ffffff' },
+  { id: 'acid', name: 'Acid', bg: '#020300', a: '#c6ff00', b: '#ff00aa', c: '#ffffff' },
 ];
 
 /** '#rrggbb' -> [r, g, b] in 0..1 */

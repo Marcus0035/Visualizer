@@ -2,8 +2,8 @@ import type { Bands } from '../audio/analysis';
 import type { SourceKind } from '../audio/AudioEngine';
 import { PALETTES } from '../modes/palettes';
 import type { Mode } from '../modes/types';
-import type { Effects } from '../render/Renderer';
-import { type Settings, variantOf } from '../settings';
+import { FONTS } from '../overlay/text';
+import { type Effects, type Settings, variantOf } from '../settings';
 import { h, icon, toggle } from './dom';
 
 /** What the panel needs from the app. */
@@ -24,7 +24,16 @@ export interface PanelActions {
   togglePlay(): void;
   listInputs(): Promise<MediaDeviceInfo[]>;
   toggleFullscreen(): void;
+  hasImage(): boolean;
+  pickImage(): void;
+  removeImage(): void;
+  setImageStyle(index: number): void;
+  setOverlaySize(value: number): void;
+  setText(text: string): void;
+  setFont(id: string): void;
 }
+
+const IMAGE_STYLES = ['Barvy palety', 'Obrys', 'Originál'];
 
 const SOURCES: { kind: SourceKind; label: string; icon: string }[] = [
   { kind: 'demo', label: 'Demo', icon: 'Music' },
@@ -34,10 +43,10 @@ const SOURCES: { kind: SourceKind; label: string; icon: string }[] = [
 ];
 
 const SHORTCUTS: [string, string][] = [
-  ['1 - 5', 'režim'],
+  ['1 - 6', 'režim'],
   ['V', 'další varianta'],
   ['P', 'další paleta'],
-  ['C / G / S', 'CRT / zrno / strobe'],
+  ['C / G / S / X', 'CRT / zrno / strobe / glitch'],
   ['Mezerník', 'přehrát / pauza souboru'],
   ['F', 'celá obrazovka'],
   ['H', 'skrýt panel'],
@@ -56,6 +65,9 @@ export class Panel {
   private chipsFor = '';
   private extraFor = '';
   private playBtn: HTMLButtonElement | null = null;
+  private readonly imageStyleBtns: HTMLButtonElement[] = [];
+  private readonly fontBtns = new Map<string, HTMLButtonElement>();
+  private readonly removeImageBtn: HTMLButtonElement;
 
   constructor(private readonly app: PanelActions) {
     const s = app.settings;
@@ -133,11 +145,55 @@ export class Panel {
       ['crt', 'CRT obrazovka'],
       ['grain', 'Zrno'],
       ['strobe', 'Strobe na beat', 'Blikání, pozor při citlivosti na světlo'],
+      ['glitch', 'Glitch na beat', 'Obraz se na kick roztrhá do pruhů'],
     ];
     for (const [key, label, hint] of fxDefs) {
       const t = toggle(label, s[key], (on) => app.setEffect(key, on), hint);
       this.fxSetters.set(key, t.set);
       fx.append(t.row);
+    }
+
+    this.removeImageBtn = h(
+      'button',
+      { class: 'icon-btn', title: 'Odebrat obrázek', 'aria-label': 'Odebrat obrázek', onclick: () => app.removeImage() },
+      icon('Trash2'),
+    );
+    const imageRow = h(
+      'div',
+      { class: 'overlay-row' },
+      h('button', { type: 'button', class: 'btn', onclick: () => app.pickImage() }, icon('ImagePlus'), h('span', {}, 'Vlastní obrázek')),
+      this.removeImageBtn,
+    );
+    const imageStyles = h('div', { class: 'chips' });
+    IMAGE_STYLES.forEach((name, i) => {
+      const b = h('button', { type: 'button', class: 'chip', onclick: () => app.setImageStyle(i) }, name);
+      this.imageStyleBtns.push(b);
+      imageStyles.append(b);
+    });
+
+    let typing = 0;
+    const textRow = h(
+      'label',
+      { class: 'text-input' },
+      icon('Type'),
+      h('input', {
+        type: 'text',
+        value: s.text,
+        maxLength: 80,
+        placeholder: 'Text, svislá čára = nový řádek',
+        'aria-label': 'Text na obrazovce',
+        oninput: (e: Event) => {
+          const value = (e.target as HTMLInputElement).value;
+          clearTimeout(typing);
+          typing = window.setTimeout(() => app.setText(value), 200);
+        },
+      }),
+    );
+    const fonts = h('div', { class: 'chips' });
+    for (const f of FONTS) {
+      const b = h('button', { type: 'button', class: 'chip', style: { fontFamily: `"${f.family}"` }, onclick: () => app.setFont(f.id) }, f.name);
+      this.fontBtns.set(f.id, b);
+      fonts.append(b);
     }
 
     const help = h(
@@ -158,6 +214,14 @@ export class Panel {
         'Citlivost a hlasitost',
         slider('Citlivost', 0.25, 4, 0.05, s.sensitivity, (v) => app.setSensitivity(v)),
         slider('Hlasitost', 0, 1, 0.01, s.volume, (v) => app.setVolume(v)),
+      ),
+      section(
+        'Obrázek a text',
+        imageRow,
+        imageStyles,
+        textRow,
+        fonts,
+        slider('Velikost', 0.2, 1, 0.01, s.overlaySize, (v) => app.setOverlaySize(v)),
       ),
       section('Efekty', fx),
       h(
@@ -215,6 +279,9 @@ export class Panel {
     for (const [id, b] of this.modeBtns) b.setAttribute('aria-pressed', String(id === s.mode));
     for (const [id, b] of this.paletteBtns) b.setAttribute('aria-pressed', String(id === s.palette));
     for (const [k, set] of this.fxSetters) set(s[k]);
+    this.imageStyleBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.imageStyle)));
+    for (const [id, b] of this.fontBtns) b.setAttribute('aria-pressed', String(id === s.font));
+    this.removeImageBtn.hidden = !this.app.hasImage();
 
     const mode = this.app.modes.find((m) => m.id === s.mode)!;
     if (this.chipsFor !== mode.id) {

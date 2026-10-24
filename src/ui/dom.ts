@@ -14,6 +14,10 @@ import {
   SlidersHorizontal,
   Upload,
   Waves,
+  ImagePlus,
+  Trash2,
+  Type,
+  Zap,
   createElement,
   type IconNode,
 } from 'lucide';
@@ -34,6 +38,10 @@ const ICONS: Record<string, IconNode> = {
   SlidersHorizontal,
   Upload,
   Waves,
+  ImagePlus,
+  Trash2,
+  Type,
+  Zap,
 };
 
 export function icon(name: string, size = 16): SVGElement {

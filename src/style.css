@@ -335,12 +335,12 @@ kbd {
 .palettes {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .swatch {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.6);
   outline: 2px solid transparent;
@@ -493,7 +493,7 @@ input[type='range'] {
 }
 
 .dragging::after {
-  content: 'Pusť soubor pro přehrání';
+  content: 'Pusť hudbu nebo obrázek';
   position: fixed;
   inset: 12px;
   display: grid;
@@ -527,4 +527,58 @@ input[type='range'] {
   .panel-closed .panel {
     transform: translateY(calc(100% + 16px));
   }
+}
+
+/* Image and text overlay */
+.overlay-row {
+  display: flex;
+  gap: 6px;
+}
+
+.overlay-row .btn {
+  flex: 1;
+}
+
+.overlay-row .icon-btn[hidden] {
+  display: none;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn:hover {
+  background: var(--hover);
+}
+
+.text-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+
+.text-input:focus-within {
+  border-color: var(--accent);
+}
+
+.text-input input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  outline: none;
+  background: transparent;
 }

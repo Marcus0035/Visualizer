@@ -1,5 +1,10 @@
 import type { Mode } from './modes/types';
-import type { Effects } from './render/Renderer';
+export interface Effects {
+  crt: boolean;
+  grain: boolean;
+  strobe: boolean;
+  glitch: boolean;
+}
 
 export interface Settings extends Effects {
   mode: string;
@@ -12,6 +17,12 @@ export interface Settings extends Effects {
   volume: number;
   inputDevice: string;
   panelOpen: boolean;
+  /** Overlay image look: 0 palette tones, 1 outline, 2 original */
+  imageStyle: number;
+  /** Overlay (image and text) size, 0.2..1 */
+  overlaySize: number;
+  text: string;
+  font: string;
 }
 
 const KEY = 'visualizer.settings.v1';
@@ -27,6 +38,11 @@ export const DEFAULTS: Settings = {
   crt: false,
   grain: false,
   strobe: false,
+  glitch: false,
+  imageStyle: 0,
+  overlaySize: 0.7,
+  text: '',
+  font: 'anton',
 };
 
 /** Keep only stored values whose type matches the default, so a corrupt entry cannot break startup. */
