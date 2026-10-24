@@ -44,6 +44,9 @@ export interface PanelActions {
   setAutoPart(key: AutoPart, on: boolean): void;
   setAutoSkip(modeId: string, skip: boolean): void;
   autoNow(): void;
+  randomize(): void;
+  back(): void;
+  canGoBack(): boolean;
 }
 
 export type AutoPart = 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter';
@@ -79,6 +82,8 @@ const SHORTCUTS: [string, string][] = [
   ['N', 'další filtr'],
   ['A', 'autopilot zapnout / vypnout'],
   ['R', 'autopilot: změnit hned'],
+  ['Kolečko dolů / šipka vpravo', 'náhodný vizuál'],
+  ['Kolečko nahoru / šipka vlevo', 'zpět na předchozí'],
   ['Mezerník', 'přehrát / pauza souboru'],
   ['F', 'celá obrazovka'],
   ['H', 'otevřít / zavřít nastavení'],
@@ -113,6 +118,9 @@ export class Panel {
   readonly el: HTMLElement;
   /** Small buttons in the top-right corner */
   readonly toolbar: HTMLElement;
+  /** Random and back buttons in the top-left corner */
+  readonly leftbar: HTMLElement;
+  private readonly backBtn: HTMLButtonElement;
   /** Short messages; sits above everything so it is seen with the dialog open or closed */
   readonly toast = h('div', { class: 'toast', role: 'status' });
 
@@ -181,6 +189,23 @@ export class Panel {
         icon('Maximize', 18),
       ),
       this.settingsBtn,
+    );
+
+    this.backBtn = h(
+      'button',
+      { class: 'tool-btn', title: 'Zpět (kolečko nahoru)', 'aria-label': 'Zpět na předchozí vizuál', onclick: () => app.back() },
+      icon('Undo2', 18),
+    );
+    this.leftbar = h(
+      'div',
+      { class: 'toolbar left' },
+      h(
+        'button',
+        { class: 'tool-btn random-btn', title: 'Náhodný vizuál (kolečko dolů)', onclick: () => app.randomize() },
+        icon('Dices', 18),
+        h('span', {}, 'Náhodně'),
+      ),
+      this.backBtn,
     );
 
     // Sound
@@ -533,6 +558,7 @@ export class Panel {
     this.filterBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.filter)));
     this.filterBeatSet(s.filterBeat);
     this.autoBtn.setAttribute('aria-pressed', String(s.auto));
+    this.backBtn.disabled = !this.app.canGoBack();
     for (const [k, set] of this.autoSetters) set(s[k]);
     for (const [n, b] of this.autoBeatsBtns) b.setAttribute('aria-pressed', String(n === s.autoBeats));
     for (const [id, b] of this.autoModeBtns) b.setAttribute('aria-pressed', String(!s.autoSkip.includes(id)));

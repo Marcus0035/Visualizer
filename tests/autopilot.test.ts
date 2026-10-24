@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AutoClock, autoStep, pickOther, randomParam } from '../src/autopilot';
+import { AutoClock, EVERYTHING, autoStep, pickOther, randomParam } from '../src/autopilot';
 import { PALETTES } from '../src/modes/palettes';
 import type { Mode, ModeParam } from '../src/modes/types';
 import { parseSettings } from '../src/settings';
@@ -102,5 +102,19 @@ describe('AutoClock', () => {
     expect(jumped).toBe(false);
     for (let i = 0; i < 200 && !jumped; i++) jumped = c.tick(false, 0.3, 0.1, 8);
     expect(jumped).toBe(true);
+  });
+});
+
+describe('random button', () => {
+  it('changes everything even with the autopilot parts off', () => {
+    const s = parseSettings({ autoMode: false, autoVariant: false, autoParams: false, autoPalette: false, autoSkip: ['plasma', 'matrix'] });
+    const seen = new Set<string>();
+    const rnd = seq(17);
+    for (let i = 0; i < 20; i++) {
+      autoStep(s, ctx, rnd, EVERYTHING);
+      seen.add(s.mode);
+    }
+    expect(seen.size).toBe(3);
+    expect(s.palette).not.toBe('blood');
   });
 });

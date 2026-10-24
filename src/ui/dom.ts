@@ -32,6 +32,8 @@ import {
   ScanEye,
   Film,
   Shuffle,
+  Dices,
+  Undo2,
   createElement,
   type IconNode,
 } from 'lucide';
@@ -70,6 +72,8 @@ const ICONS: Record<string, IconNode> = {
   ScanEye,
   Film,
   Shuffle,
+  Dices,
+  Undo2,
 };
 
 export function icon(name: string, size = 16): SVGElement {

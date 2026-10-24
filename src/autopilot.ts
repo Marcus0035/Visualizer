@@ -26,31 +26,44 @@ export function randomParam(p: ModeParam, rnd: Rnd): number {
   return Math.min(max, Math.max(min, Number(snapped.toFixed(6))));
 }
 
+/** What a jump may change */
+export type AutoParts = Pick<Settings, 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoSkip'>;
+
+/** Everything at once, for the random button */
+export const EVERYTHING: AutoParts = {
+  autoMode: true,
+  autoVariant: true,
+  autoParams: true,
+  autoPalette: true,
+  autoFilter: true,
+  autoSkip: [],
+};
+
 export interface AutoContext {
   modes: readonly Mode[];
   palettes: readonly Palette[];
   filterCount: number;
 }
 
-/** One autopilot jump: changes the parts of `s` the user allowed. */
-export function autoStep(s: Settings, ctx: AutoContext, rnd: Rnd = Math.random): void {
-  if (s.autoMode) {
-    const pool = ctx.modes.filter((m) => !s.autoSkip.includes(m.id)).map((m) => m.id);
+/** One jump: changes the given parts of `s` (by default the ones allowed for the autopilot). */
+export function autoStep(s: Settings, ctx: AutoContext, rnd: Rnd = Math.random, parts: AutoParts = s): void {
+  if (parts.autoMode) {
+    const pool = ctx.modes.filter((m) => !parts.autoSkip.includes(m.id)).map((m) => m.id);
     if (pool.length) s.mode = pickOther(pool, s.mode, rnd);
   }
   const mode = ctx.modes.find((m) => m.id === s.mode);
-  if (mode && s.autoVariant) {
+  if (mode && parts.autoVariant) {
     const indices = mode.variants.map((_, i) => i);
     s.variants[mode.id] = pickOther(indices, s.variants[mode.id] ?? 0, rnd);
   }
-  if (mode?.params && s.autoParams) {
+  if (mode?.params && parts.autoParams) {
     s.params[mode.id] = Object.fromEntries(mode.params.map((p) => [p.id, randomParam(p, rnd)]));
   }
-  if (s.autoPalette) {
+  if (parts.autoPalette) {
     const ids = ctx.palettes.filter((p) => p.dark).map((p) => p.id);
     s.palette = pickOther(ids, s.palette, rnd);
   }
-  if (s.autoFilter) {
+  if (parts.autoFilter) {
     // Every other jump on average goes back to a clean picture
     const filters = Array.from({ length: ctx.filterCount - 1 }, (_, i) => i + 1);
     s.filter = s.filter !== 0 && rnd() < 0.5 ? 0 : pickOther(filters, s.filter, rnd);

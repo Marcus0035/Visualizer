@@ -1,6 +1,6 @@
 import './style.css';
 import { AudioEngine } from './audio/AudioEngine';
-import { AUTO_EVERY, AutoClock, autoStep } from './autopilot';
+import { AUTO_EVERY, AutoClock, EVERYTHING, autoStep } from './autopilot';
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode } from './modes/types';
@@ -84,6 +84,33 @@ const autoClock = new AutoClock();
 function autoJump(): void {
   autoClock.reset();
   autoStep(settings, { modes: MODES, palettes: PALETTES, filterCount: FILTERS.length });
+  panel.refreshParams();
+  changed();
+}
+
+/** Earlier looks for the back button, newest last */
+const history: string[] = [];
+
+function look(): string {
+  const { mode, variants, params, palette, filter } = settings;
+  return JSON.stringify({ mode, variants, params, palette, filter });
+}
+
+/** Random button and scroll wheel: everything new, like flipping through a feed. */
+function randomize(): void {
+  history.push(look());
+  if (history.length > 100) history.shift();
+  autoClock.reset();
+  autoStep(settings, { modes: MODES, palettes: PALETTES, filterCount: FILTERS.length }, Math.random, EVERYTHING);
+  panel.refreshParams();
+  changed();
+}
+
+function back(): void {
+  const prev = history.pop();
+  if (!prev) return;
+  Object.assign(settings, JSON.parse(prev));
+  autoClock.reset();
   panel.refreshParams();
   changed();
 }
@@ -200,6 +227,9 @@ const actions: PanelActions = {
     changed();
   },
   autoNow: () => autoJump(),
+  randomize: () => randomize(),
+  back: () => back(),
+  canGoBack: () => history.length > 0,
   setFont(id) {
     settings.font = id;
     changed();
@@ -208,7 +238,7 @@ const actions: PanelActions = {
 };
 
 const panel = new Panel(actions);
-document.body.append(panel.toolbar, panel.el, panel.toast);
+document.body.append(panel.leftbar, panel.toolbar, panel.el, panel.toast);
 audio.onchange = () => panel.sync();
 changed();
 void updateText();
@@ -304,6 +334,16 @@ window.addEventListener('keydown', (e) => {
       return panel.setStatus(settings.auto ? 'Autopilot zapnutý' : 'Autopilot vypnutý');
     case 'r':
       return autoJump();
+    case 'arrowright':
+    case 'arrowdown':
+      if (panel.isOpen) return;
+      e.preventDefault();
+      return randomize();
+    case 'arrowleft':
+    case 'arrowup':
+      if (panel.isOpen) return;
+      e.preventDefault();
+      return back();
     case 'f':
       return actions.toggleFullscreen();
     case 'h':
@@ -314,6 +354,23 @@ window.addEventListener('keydown', (e) => {
       return actions.togglePlay();
   }
 });
+
+// Doomscroll: wheel down = something new, up = back. One step per scroll gesture, so a
+// touchpad's long inertia stream does not skip through dozens of looks
+let lastWheel = 0;
+window.addEventListener(
+  'wheel',
+  (e) => {
+    if (start.isConnected || panel.isOpen || Math.abs(e.deltaY) < 2) return;
+    const now = performance.now();
+    if (now - lastWheel > 250) {
+      if (e.deltaY > 0) randomize();
+      else back();
+    }
+    lastWheel = now;
+  },
+  { passive: true },
+);
 
 // Hide the cursor and dim the panel when the mouse rests
 let idleTimer = 0;
