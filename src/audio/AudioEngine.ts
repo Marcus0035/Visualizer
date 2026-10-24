@@ -1,0 +1,201 @@
+import { BeatDetector, type Bands, computeBands, envelope, normalizeDb, rms } from './analysis';
+import { renderDemoLoop } from './demo';
+
+export type SourceKind = 'demo' | 'input' | 'file' | 'tab';
+
+/** Everything a mode needs from the audio for one frame. Arrays are reused between frames. */
+export interface AudioFrame {
+  /** Mono waveform, -1..1 */
+  wave: Float32Array<ArrayBuffer>;
+  waveL: Float32Array<ArrayBuffer>;
+  waveR: Float32Array<ArrayBuffer>;
+  /** Linear-frequency spectrum, 0..1 per bin (0..Nyquist) */
+  spectrum: Float32Array<ArrayBuffer>;
+  sampleRate: number;
+  /** Smoothed band energies, 0..1 */
+  bands: Bands;
+  /** Smoothed RMS level, roughly 0..1 */
+  level: number;
+  /** True only on the frame a beat was detected */
+  beat: boolean;
+  /** 1 on a beat, decays to 0 */
+  pulse: number;
+}
+
+const FFT_SIZE = 2048;
+const MIN_DB = -90;
+const MAX_DB = -10;
+
+export class AudioEngine {
+  readonly ctx = new AudioContext();
+  readonly frame: AudioFrame;
+
+  private readonly input = this.ctx.createGain(); // sensitivity, feeds analysis only
+  private readonly monitor = this.ctx.createGain(); // what reaches the speakers
+  private readonly mono = this.ctx.createAnalyser();
+  private readonly left = this.ctx.createAnalyser();
+  private readonly right = this.ctx.createAnalyser();
+  private readonly beats = new BeatDetector();
+  private readonly dbBuf = new Float32Array(FFT_SIZE / 2);
+
+  private source: AudioNode | null = null;
+  private stream: MediaStream | null = null;
+  private media: HTMLAudioElement | null = null;
+  private demoBuffer: AudioBuffer | null = null;
+
+  kind: SourceKind | null = null;
+  /** Name shown in the UI (file name, device label) */
+  label = '';
+
+  constructor() {
+    for (const a of [this.mono, this.left, this.right]) {
+      a.fftSize = FFT_SIZE;
+      a.smoothingTimeConstant = 0.6;
+      a.minDecibels = MIN_DB;
+      a.maxDecibels = MAX_DB;
+    }
+    const splitter = this.ctx.createChannelSplitter(2);
+    this.input.connect(this.mono);
+    this.input.connect(splitter);
+    splitter.connect(this.left, 0);
+    splitter.connect(this.right, 1);
+    this.monitor.connect(this.ctx.destination);
+
+    this.frame = {
+      wave: new Float32Array(FFT_SIZE),
+      waveL: new Float32Array(FFT_SIZE),
+      waveR: new Float32Array(FFT_SIZE),
+      spectrum: new Float32Array(FFT_SIZE / 2),
+      sampleRate: this.ctx.sampleRate,
+      bands: { bass: 0, mid: 0, treble: 0 },
+      level: 0,
+      beat: false,
+      pulse: 0,
+    };
+  }
+
+  set sensitivity(value: number) {
+    this.input.gain.value = value;
+  }
+
+  set volume(value: number) {
+    this.monitor.gain.value = value;
+  }
+
+  async resume(): Promise<void> {
+    if (this.ctx.state !== 'running') await this.ctx.resume();
+  }
+
+  async useDemo(): Promise<void> {
+    await this.resume();
+    this.demoBuffer ??= renderDemoLoop(this.ctx);
+    const node = this.ctx.createBufferSource();
+    node.buffer = this.demoBuffer;
+    node.loop = true;
+    this.attach(node, 'demo', 'Demo smyčka', true);
+    node.start();
+  }
+
+  /** Microphone, line-in or a PipeWire/Pulse monitor source (system output). */
+  async useInput(deviceId?: string): Promise<void> {
+    await this.resume();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+    });
+    const track = stream.getAudioTracks()[0];
+    this.attach(this.ctx.createMediaStreamSource(stream), 'input', track?.label || 'Vstup', false);
+    this.stream = stream;
+  }
+
+  /** Audio shared from a browser tab or screen (Chromium: tab audio). */
+  async useTab(): Promise<void> {
+    await this.resume();
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    if (stream.getAudioTracks().length === 0) {
+      stream.getTracks().forEach((t) => t.stop());
+      throw new Error('Sdílení neobsahuje zvuk. Při výběru zapni sdílení zvuku.');
+    }
+    // Only the audio is needed
+    stream.getVideoTracks().forEach((t) => t.stop());
+    this.attach(this.ctx.createMediaStreamSource(stream), 'tab', 'Sdílený zvuk', false);
+    this.stream = stream;
+  }
+
+  async useFile(file: File): Promise<void> {
+    await this.resume();
+    const el = new Audio();
+    el.src = URL.createObjectURL(file);
+    el.loop = true;
+    this.attach(this.ctx.createMediaElementSource(el), 'file', file.name, true);
+    this.media = el;
+    await el.play();
+  }
+
+  get playing(): boolean {
+    return this.media ? !this.media.paused : this.kind !== null;
+  }
+
+  /** Play/pause for file sources. Returns the new playing state. */
+  togglePlay(): boolean {
+    if (!this.media) return this.playing;
+    if (this.media.paused) void this.media.play();
+    else this.media.pause();
+    return !this.media.paused;
+  }
+
+  /** Labelled audio inputs; labels are empty until the user grants mic permission once. */
+  async listInputs(): Promise<MediaDeviceInfo[]> {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return all.filter((d) => d.kind === 'audioinput');
+  }
+
+  /** Read the analysers and update `frame`. Call once per animation frame. */
+  update(dt: number, nowMs: number): AudioFrame {
+    const f = this.frame;
+    this.mono.getFloatTimeDomainData(f.wave);
+    this.left.getFloatTimeDomainData(f.waveL);
+    this.right.getFloatTimeDomainData(f.waveR);
+    this.mono.getFloatFrequencyData(this.dbBuf);
+    for (let i = 0; i < this.dbBuf.length; i++) f.spectrum[i] = normalizeDb(this.dbBuf[i], MIN_DB, MAX_DB);
+
+    const raw = computeBands(f.spectrum, f.sampleRate);
+    f.bands.bass = envelope(f.bands.bass, raw.bass, dt);
+    f.bands.mid = envelope(f.bands.mid, raw.mid, dt);
+    f.bands.treble = envelope(f.bands.treble, raw.treble, dt);
+    f.level = envelope(f.level, Math.min(1, rms(f.wave) * 2.5), dt);
+
+    f.beat = this.beats.update(raw.bass, nowMs);
+    f.pulse = f.beat ? 1 : f.pulse * Math.exp(-dt * 6);
+    return f;
+  }
+
+  private attach(node: AudioNode, kind: SourceKind, label: string, audible: boolean): void {
+    this.detach();
+    node.connect(this.input);
+    if (audible) node.connect(this.monitor);
+    this.source = node;
+    this.kind = kind;
+    this.label = label;
+    this.beats.reset();
+  }
+
+  private detach(): void {
+    if (this.source instanceof AudioBufferSourceNode) this.source.stop();
+    this.source?.disconnect();
+    this.source = null;
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+    if (this.media) {
+      this.media.pause();
+      URL.revokeObjectURL(this.media.src);
+      this.media = null;
+    }
+    this.kind = null;
+    this.label = '';
+  }
+}
