@@ -158,7 +158,7 @@ const actions: PanelActions = {
 };
 
 const panel = new Panel(actions);
-document.body.append(panel.toolbar, panel.el);
+document.body.append(panel.toolbar, panel.el, panel.toast);
 audio.onchange = () => panel.sync();
 changed();
 void updateText();
@@ -216,6 +216,7 @@ window.addEventListener('drop', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if (start.isConnected) return; // nothing to control before the start click
   if (e.key === 'Escape' && panel.isOpen) return panel.close();
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
   const target = e.target as HTMLElement;

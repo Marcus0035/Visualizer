@@ -96,9 +96,10 @@ export class Panel {
   readonly el: HTMLElement;
   /** Small buttons in the top-right corner */
   readonly toolbar: HTMLElement;
+  /** Short messages; sits above everything so it is seen with the dialog open or closed */
+  readonly toast = h('div', { class: 'toast', role: 'status' });
 
   private readonly status = h('p', { class: 'status', 'aria-live': 'polite' });
-  private readonly toast = h('div', { class: 'toast', role: 'status' });
   private toastTimer = 0;
   private readonly meters: HTMLElement[] = [];
   private readonly sourceBtns = new Map<SourceKind, HTMLButtonElement>();
@@ -120,6 +121,9 @@ export class Panel {
   private extraFor = '';
   private playBtn: HTMLButtonElement | null = null;
   private opener: HTMLElement | null = null;
+  private readonly settingsBtn: HTMLButtonElement;
+  /** Elements made inert while the dialog is open (focus stays inside) */
+  private inerted: HTMLElement[] = [];
 
   constructor(private readonly app: PanelActions) {
     const s = app.settings;
@@ -131,6 +135,11 @@ export class Panel {
       this.meters.push(bar);
       miniMeter.append(bar);
     }
+    this.settingsBtn = h(
+      'button',
+      { class: 'tool-btn', title: 'Nastavení (H)', 'aria-label': 'Nastavení', onclick: () => this.open() },
+      icon('Settings', 18),
+    );
     this.toolbar = h(
       'div',
       { class: 'toolbar' },
@@ -140,12 +149,7 @@ export class Panel {
         { class: 'tool-btn', title: 'Celá obrazovka (F)', 'aria-label': 'Celá obrazovka', onclick: () => app.toggleFullscreen() },
         icon('Maximize', 18),
       ),
-      h(
-        'button',
-        { class: 'tool-btn', title: 'Nastavení (H)', 'aria-label': 'Nastavení', onclick: () => this.open() },
-        icon('Settings', 18),
-      ),
-      this.toast,
+      this.settingsBtn,
     );
 
     // Sound
@@ -297,7 +301,11 @@ export class Panel {
         h('span', {}, t.label),
       );
       btn.addEventListener('keydown', (e) => this.tabKeys(e, t.id));
-      const panel = h('div', { class: 'tab-panel', role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` }, ...panels[t.id]);
+      const panel = h(
+        'div',
+        { class: 'tab-panel', role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}`, tabindex: '0' },
+        ...panels[t.id],
+      );
       this.tabBtns.set(t.id, btn);
       this.tabPanels.set(t.id, panel);
       tablist.append(btn);
@@ -320,9 +328,11 @@ export class Panel {
         body,
       ),
     );
-    // Click on the dimmed area around the window closes it
+    // Click on the dimmed area around the window closes it; a drag that merely ends there does not
+    let downOnBackdrop = false;
+    this.el.addEventListener('pointerdown', (e) => (downOnBackdrop = e.target === this.el));
     this.el.addEventListener('click', (e) => {
-      if (e.target === this.el) this.close();
+      if (downOnBackdrop && e.target === this.el) this.close();
     });
 
     this.el.inert = true;
@@ -338,6 +348,10 @@ export class Panel {
     if (this.isOpen) return;
     this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.el.inert = false;
+    this.inerted = Array.from(document.body.children).filter(
+      (c): c is HTMLElement => c instanceof HTMLElement && c !== this.el && c !== this.toast && !c.inert,
+    );
+    for (const c of this.inerted) c.inert = true;
     document.body.classList.add('modal-open');
     this.tabBtns.get(this.app.settings.settingsTab as TabId)?.focus();
   }
@@ -345,8 +359,11 @@ export class Panel {
   close(): void {
     if (!this.isOpen) return;
     this.el.inert = true;
+    for (const c of this.inerted) c.inert = false;
+    this.inerted = [];
     document.body.classList.remove('modal-open');
-    this.opener?.focus();
+    const back = this.opener?.isConnected && this.opener !== document.body ? this.opener : this.settingsBtn;
+    back.focus();
     this.opener = null;
   }
 
@@ -381,11 +398,11 @@ export class Panel {
     this.tabBtns.get(TABS[next].id)?.focus();
   }
 
-  /** Show a message in the sound tab; errors also pop up as a toast when the window is closed. */
+  /** Show a message in the sound tab and as a short toast. */
   setStatus(text: string, error = false): void {
     this.status.textContent = text;
     this.status.classList.toggle('error', error);
-    if (text && !this.isOpen) {
+    if (text) {
       this.toast.textContent = text;
       this.toast.classList.toggle('error', error);
       this.toast.classList.add('show');
