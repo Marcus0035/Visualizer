@@ -23,6 +23,9 @@ if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
 if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
 settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
 if (!AUTO_EVERY.includes(settings.autoBeats)) settings.autoBeats = 1;
+settings.autoSkip = [...new Set(settings.autoSkip.filter((id) => MODES.some((m) => m.id === id)))];
+// The autopilot needs at least one mode to pick from
+if (settings.autoSkip.length >= MODES.length) settings.autoSkip = [];
 
 const canvas = h('canvas', { class: 'stage' });
 const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
@@ -191,7 +194,9 @@ const actions: PanelActions = {
     changed();
   },
   setAutoSkip(modeId, skip) {
-    settings.autoSkip = skip ? [...settings.autoSkip, modeId] : settings.autoSkip.filter((id) => id !== modeId);
+    const rest = settings.autoSkip.filter((id) => id !== modeId);
+    if (skip && rest.length + 1 >= MODES.length) return panel.setStatus('Aspoň jeden režim musí v autopilotu zůstat.');
+    settings.autoSkip = skip ? [...rest, modeId] : rest;
     changed();
   },
   autoNow: () => autoJump(),

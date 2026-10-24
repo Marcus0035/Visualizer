@@ -299,7 +299,11 @@ export class Renderer {
     // To the screen; the frame stays in outTex as next frame's uPrev
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.outFbo[this.out]);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-    gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, this.width, this.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    // The browser may give a smaller drawing buffer than asked for; then scale down
+    const dw = gl.drawingBufferWidth;
+    const dh = gl.drawingBufferHeight;
+    const filter = dw === this.width && dh === this.height ? gl.NEAREST : gl.LINEAR;
+    gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, dw, dh, gl.COLOR_BUFFER_BIT, filter);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 

@@ -71,9 +71,9 @@ export class AutoClock {
   tick(beat: boolean, level: number, dt: number, every: number): boolean {
     if (level > 0.02) this.seconds += dt;
     if (beat) this.kicks++;
-    // Jump on a kick; if the beat detector misses kicks, the time (about 0.75 s per
-    // kick) takes over: first waiting for any kick, then without one
-    const due = this.kicks >= every || (beat && this.seconds >= every * 0.75) || this.seconds >= every * 1.2;
+    // Jump on a kick; if the beat detector misses kicks, the time (1 s per kick, slow
+    // enough for 60 BPM) takes over: first waiting for any kick, then without one
+    const due = this.kicks >= every || (beat && this.seconds >= every) || this.seconds >= every * 1.5;
     if (due) this.reset();
     return due;
   }

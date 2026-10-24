@@ -141,6 +141,8 @@ export class Panel {
   private readonly closeBtn: HTMLButtonElement;
   private chipsFor = '';
   private paramsFor = '';
+  /** A mode slider is being dragged: do not rebuild the sliders under the pointer */
+  private draggingParam = false;
   private extraFor = '';
   private playBtn: HTMLButtonElement | null = null;
   private opener: HTMLElement | null = null;
@@ -278,6 +280,9 @@ export class Panel {
     }
 
     this.paramsCard = card('Nastavení režimu', this.paramsBox);
+    this.paramsBox.addEventListener('pointerdown', () => (this.draggingParam = true));
+    window.addEventListener('pointerup', () => (this.draggingParam = false));
+    window.addEventListener('pointercancel', () => (this.draggingParam = false));
 
     // Filters
     const filters = h('div', { class: 'filter-grid' });
@@ -541,7 +546,7 @@ export class Panel {
         ),
       );
     }
-    if (this.paramsFor !== mode.id) {
+    if (this.paramsFor !== mode.id && !this.draggingParam) {
       this.paramsFor = mode.id;
       this.renderParams(mode);
     }
