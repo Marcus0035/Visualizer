@@ -6,7 +6,7 @@ import { FONTS } from '../overlay/text';
 import { type Effects, type Settings, paramValue, variantOf } from '../settings';
 import { h, icon, toggle } from './dom';
 
-/** What the panel needs from the app. */
+/** What the settings window needs from the app. */
 export interface PanelActions {
   modes: Mode[];
   settings: Settings;
@@ -33,7 +33,18 @@ export interface PanelActions {
   setOverlaySize(value: number): void;
   setText(text: string): void;
   setFont(id: string): void;
+  saveSettings(): void;
 }
+
+const TABS = [
+  { id: 'sound', label: 'Zvuk', icon: 'AudioLines' },
+  { id: 'mode', label: 'Režim', icon: 'Zap' },
+  { id: 'look', label: 'Barvy a efekty', icon: 'Palette' },
+  { id: 'overlay', label: 'Obrázek a text', icon: 'ImagePlus' },
+  { id: 'keys', label: 'Zkratky', icon: 'Keyboard' },
+] as const;
+
+type TabId = (typeof TABS)[number]['id'];
 
 const IMAGE_STYLES = ['Barvy palety', 'Obrys', 'Originál'];
 
@@ -47,15 +58,48 @@ const SOURCES: { kind: SourceKind; label: string; icon: string }[] = [
 const SHORTCUTS: [string, string][] = [
   ['V', 'další varianta'],
   ['P', 'další paleta'],
-  ['C / G / S / X', 'CRT / zrno / strobe / glitch'],
+  ['C', 'CRT obrazovka'],
+  ['G', 'zrno'],
+  ['S', 'strobe na beat'],
+  ['X', 'glitch na beat'],
   ['Mezerník', 'přehrát / pauza souboru'],
   ['F', 'celá obrazovka'],
-  ['H', 'skrýt panel'],
+  ['H', 'otevřít / zavřít nastavení'],
+  ['Esc', 'zavřít nastavení'],
 ];
 
+const BANDS = ['Basy', 'Středy', 'Výšky'];
+
+function card(title: string, ...children: (Node | null)[]): HTMLElement {
+  return h('section', { class: 'card' }, h('h2', {}, title), ...children);
+}
+
+function slider(label: string, min: number, max: number, step: number, value: number, set: (v: number) => void) {
+  return h(
+    'label',
+    { class: 'slider' },
+    h('span', {}, label),
+    h('input', {
+      type: 'range',
+      min: String(min),
+      max: String(max),
+      step: String(step),
+      value: String(value),
+      oninput: (e: Event) => set(Number((e.target as HTMLInputElement).value)),
+    }),
+  );
+}
+
+/** Top-right toolbar plus a full-window settings dialog split into tabs. */
 export class Panel {
+  /** The settings dialog */
   readonly el: HTMLElement;
+  /** Small buttons in the top-right corner */
+  readonly toolbar: HTMLElement;
+
   private readonly status = h('p', { class: 'status', 'aria-live': 'polite' });
+  private readonly toast = h('div', { class: 'toast', role: 'status' });
+  private toastTimer = 0;
   private readonly meters: HTMLElement[] = [];
   private readonly sourceBtns = new Map<SourceKind, HTMLButtonElement>();
   private readonly modeBtns = new Map<string, HTMLButtonElement>();
@@ -63,49 +107,73 @@ export class Panel {
   private readonly variantBox = h('div', { class: 'chips' });
   private readonly sourceExtra = h('div', { class: 'source-extra' });
   private readonly fxSetters = new Map<keyof Effects, (on: boolean) => void>();
-  private chipsFor = '';
-  private paramsFor = '';
   private readonly paramsBox = h('div', { class: 'params' });
-  private extraFor = '';
-  private playBtn: HTMLButtonElement | null = null;
+  private readonly paramsCard: HTMLElement;
   private readonly imageStyleBtns: HTMLButtonElement[] = [];
   private readonly fontBtns = new Map<string, HTMLButtonElement>();
   private readonly removeImageBtn: HTMLButtonElement;
+  private readonly tabBtns = new Map<TabId, HTMLButtonElement>();
+  private readonly tabPanels = new Map<TabId, HTMLElement>();
+  private readonly closeBtn: HTMLButtonElement;
+  private chipsFor = '';
+  private paramsFor = '';
+  private extraFor = '';
+  private playBtn: HTMLButtonElement | null = null;
+  private opener: HTMLElement | null = null;
 
   constructor(private readonly app: PanelActions) {
     const s = app.settings;
 
-    const meter = h('div', { class: 'meter', title: 'Basy / středy / výšky' });
+    // Toolbar
+    const miniMeter = h('div', { class: 'meter', title: 'Basy / středy / výšky' });
     for (let i = 0; i < 3; i++) {
       const bar = h('i');
       this.meters.push(bar);
-      meter.append(bar);
+      miniMeter.append(bar);
     }
-
-    const collapse = h(
-      'button',
-      { class: 'icon-btn', title: 'Skrýt panel (H)', 'aria-label': 'Skrýt panel', onclick: () => this.setOpen(false) },
-      icon('ChevronLeft'),
+    this.toolbar = h(
+      'div',
+      { class: 'toolbar' },
+      miniMeter,
+      h(
+        'button',
+        { class: 'tool-btn', title: 'Celá obrazovka (F)', 'aria-label': 'Celá obrazovka', onclick: () => app.toggleFullscreen() },
+        icon('Maximize', 18),
+      ),
+      h(
+        'button',
+        { class: 'tool-btn', title: 'Nastavení (H)', 'aria-label': 'Nastavení', onclick: () => this.open() },
+        icon('Settings', 18),
+      ),
+      this.toast,
     );
 
+    // Sound
     const sources = h('div', { class: 'segmented' });
     for (const src of SOURCES) {
       const b = h(
         'button',
         { type: 'button', 'aria-pressed': 'false', onclick: () => this.chooseSource(src.kind) },
-        icon(src.icon),
+        icon(src.icon, 18),
         h('span', {}, src.label),
       );
       this.sourceBtns.set(src.kind, b);
       sources.append(b);
     }
+    const levels = h('div', { class: 'levels' });
+    BANDS.forEach((name) => {
+      const fill = h('i');
+      this.meters.push(fill);
+      levels.append(h('div', { class: 'level' }, h('span', {}, name), h('div', { class: 'level-bar' }, fill)));
+    });
 
-    const modes = h('div', { class: 'modes' });
+    // Mode
+    const modes = h('div', { class: 'mode-grid' });
     app.modes.forEach((m, i) => {
       const b = h(
         'button',
-        { type: 'button', 'aria-pressed': 'false', onclick: () => app.setMode(m.id) },
-        icon(m.icon, 18),
+        { type: 'button', class: 'mode-btn', 'aria-pressed': 'false', onclick: () => app.setMode(m.id) },
+        icon(m.icon, 22),
         h('span', {}, m.name),
         h('kbd', {}, String(i + 1)),
       );
@@ -113,40 +181,23 @@ export class Panel {
       modes.append(b);
     });
 
-    const palettes = h('div', { class: 'palettes' });
+    // Look
+    const palettes = h('div', { class: 'palette-grid' });
     for (const p of PALETTES) {
-      const b = h('button', {
-        type: 'button',
-        class: 'swatch',
-        title: p.name,
-        'aria-label': `Paleta ${p.name}`,
-        'aria-pressed': 'false',
-        style: { background: `linear-gradient(135deg, ${p.a} 0 40%, ${p.b} 40% 70%, ${p.c} 70%)`, outlineColor: p.a },
-        onclick: () => app.setPalette(p.id),
-      });
+      const b = h(
+        'button',
+        { type: 'button', class: 'palette-btn', 'aria-pressed': 'false', onclick: () => app.setPalette(p.id) },
+        h('i', { class: 'swatch', style: { background: `linear-gradient(135deg, ${p.bg} 0 30%, ${p.b} 30% 55%, ${p.a} 55% 80%, ${p.c} 80%)` } }),
+        h('span', {}, p.name),
+      );
+      b.style.setProperty('--swatch', p.a);
       this.paletteBtns.set(p.id, b);
       palettes.append(b);
     }
-
-    const slider = (label: string, min: number, max: number, step: number, value: number, set: (v: number) => void) =>
-      h(
-        'label',
-        { class: 'slider' },
-        h('span', {}, label),
-        h('input', {
-          type: 'range',
-          min: String(min),
-          max: String(max),
-          step: String(step),
-          value: String(value),
-          oninput: (e: Event) => set(Number((e.target as HTMLInputElement).value)),
-        }),
-      );
-
     const fx = h('div', { class: 'switches' });
     const fxDefs: [keyof Effects, string, string?][] = [
-      ['crt', 'CRT obrazovka'],
-      ['grain', 'Zrno'],
+      ['crt', 'CRT obrazovka', 'Zakřivení, řádky a barevný posun'],
+      ['grain', 'Zrno', 'Šum jako na filmu'],
       ['strobe', 'Strobe na beat', 'Blikání, pozor při citlivosti na světlo'],
       ['glitch', 'Glitch na beat', 'Obraz se na kick roztrhá do pruhů'],
     ];
@@ -156,16 +207,11 @@ export class Panel {
       fx.append(t.row);
     }
 
+    // Overlay
     this.removeImageBtn = h(
       'button',
       { class: 'icon-btn', title: 'Odebrat obrázek', 'aria-label': 'Odebrat obrázek', onclick: () => app.removeImage() },
       icon('Trash2'),
-    );
-    const imageRow = h(
-      'div',
-      { class: 'overlay-row' },
-      h('button', { type: 'button', class: 'btn', onclick: () => app.pickImage() }, icon('ImagePlus'), h('span', {}, 'Vlastní obrázek')),
-      this.removeImageBtn,
     );
     const imageStyles = h('div', { class: 'chips' });
     IMAGE_STYLES.forEach((name, i) => {
@@ -173,9 +219,8 @@ export class Panel {
       this.imageStyleBtns.push(b);
       imageStyles.append(b);
     });
-
     let typing = 0;
-    const textRow = h(
+    const textInput = h(
       'label',
       { class: 'text-input' },
       icon('Type'),
@@ -199,79 +244,162 @@ export class Panel {
       fonts.append(b);
     }
 
-    const help = h(
-      'details',
-      { class: 'help' },
-      h('summary', {}, icon('Keyboard'), h('span', {}, 'Klávesové zkratky')),
-      h('dl', {}, ...[[`1 - ${app.modes.length}`, 'režim'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)])),
+    this.paramsCard = card('Nastavení režimu', this.paramsBox);
+
+    const panels: Record<TabId, HTMLElement[]> = {
+      sound: [
+        card('Zdroj zvuku', sources, this.sourceExtra, this.status),
+        card(
+          'Úrovně',
+          slider('Citlivost', 0.25, 4, 0.05, s.sensitivity, (v) => app.setSensitivity(v)),
+          slider('Hlasitost', 0, 1, 0.01, s.volume, (v) => app.setVolume(v)),
+          levels,
+          h('small', { class: 'hint' }, 'Citlivost nastav tak, aby basy na kopák skoro došly nahoru.'),
+        ),
+      ],
+      mode: [card('Režim', modes, h('h3', {}, 'Varianta'), this.variantBox), this.paramsCard],
+      look: [h('section', { class: 'card wide' }, h('h2', {}, 'Paleta'), palettes), card('Efekty', fx)],
+      overlay: [
+        card(
+          'Obrázek',
+          h(
+            'div',
+            { class: 'overlay-row' },
+            h('button', { type: 'button', class: 'btn', onclick: () => app.pickImage() }, icon('ImagePlus'), h('span', {}, 'Vybrat obrázek')),
+            this.removeImageBtn,
+          ),
+          h('h3', {}, 'Vzhled'),
+          imageStyles,
+          h('small', { class: 'hint' }, 'Obrázek jde i přetáhnout do okna.'),
+        ),
+        card('Text', textInput, h('h3', {}, 'Písmo'), fonts),
+        card('Velikost', slider('Obrázek a text', 0.2, 1, 0.01, s.overlaySize, (v) => app.setOverlaySize(v))),
+      ],
+      keys: [
+        card(
+          'Klávesové zkratky',
+          h(
+            'dl',
+            { class: 'keys' },
+            ...[[`1 - ${app.modes.length}`, 'režim'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
+          ),
+        ),
+      ],
+    };
+
+    const tablist = h('nav', { class: 'tabs', role: 'tablist', 'aria-label': 'Sekce nastavení' });
+    const body = h('div', { class: 'modal-body' });
+    for (const t of TABS) {
+      const btn = h(
+        'button',
+        { type: 'button', role: 'tab', id: `tab-${t.id}`, 'aria-controls': `panel-${t.id}`, onclick: () => this.showTab(t.id) },
+        icon(t.icon, 18),
+        h('span', {}, t.label),
+      );
+      btn.addEventListener('keydown', (e) => this.tabKeys(e, t.id));
+      const panel = h('div', { class: 'tab-panel', role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` }, ...panels[t.id]);
+      this.tabBtns.set(t.id, btn);
+      this.tabPanels.set(t.id, panel);
+      tablist.append(btn);
+      body.append(panel);
+    }
+
+    this.closeBtn = h(
+      'button',
+      { class: 'icon-btn close', title: 'Zavřít (Esc)', 'aria-label': 'Zavřít nastavení', onclick: () => this.close() },
+      icon('X', 20),
     );
 
     this.el = h(
-      'aside',
-      { class: 'panel', 'aria-label': 'Ovládání' },
-      h('header', {}, h('h1', {}, 'Visualizer'), meter, collapse),
-      section('Zdroj zvuku', sources, this.sourceExtra, this.status),
-      section('Režim', modes, this.variantBox, this.paramsBox),
-      section('Paleta', palettes),
-      section(
-        'Citlivost a hlasitost',
-        slider('Citlivost', 0.25, 4, 0.05, s.sensitivity, (v) => app.setSensitivity(v)),
-        slider('Hlasitost', 0, 1, 0.01, s.volume, (v) => app.setVolume(v)),
-      ),
-      section(
-        'Obrázek a text',
-        imageRow,
-        imageStyles,
-        textRow,
-        fonts,
-        slider('Velikost', 0.2, 1, 0.01, s.overlaySize, (v) => app.setOverlaySize(v)),
-      ),
-      section('Efekty', fx),
+      'div',
+      { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'settings-title' },
       h(
-        'footer',
-        {},
-        help,
-        h(
-          'button',
-          { class: 'icon-btn', title: 'Celá obrazovka (F)', 'aria-label': 'Celá obrazovka', onclick: () => app.toggleFullscreen() },
-          icon('Maximize'),
-        ),
+        'div',
+        { class: 'modal-window' },
+        h('header', { class: 'modal-head' }, h('h1', { id: 'settings-title' }, 'Nastavení'), tablist, this.closeBtn),
+        body,
       ),
     );
+    // Click on the dimmed area around the window closes it
+    this.el.addEventListener('click', (e) => {
+      if (e.target === this.el) this.close();
+    });
 
-    this.setOpen(s.panelOpen);
+    this.el.inert = true;
+    const saved = TABS.find((t) => t.id === s.settingsTab);
+    this.showTab(saved ? saved.id : 'mode');
   }
 
-  /** Small handle shown when the panel is collapsed. */
-  readonly opener = h(
-    'button',
-    {
-      class: 'opener icon-btn',
-      title: 'Zobrazit panel (H)',
-      'aria-label': 'Zobrazit panel',
-      onclick: () => this.setOpen(true),
-    },
-    icon('SlidersHorizontal', 18),
-  );
+  get isOpen(): boolean {
+    return document.body.classList.contains('modal-open');
+  }
 
-  setOpen(open: boolean): void {
-    this.app.settings.panelOpen = open;
-    this.el.inert = !open; // keep focus and Space out of the hidden panel
-    document.body.classList.toggle('panel-closed', !open);
+  open(): void {
+    if (this.isOpen) return;
+    this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    this.el.inert = false;
+    document.body.classList.add('modal-open');
+    this.tabBtns.get(this.app.settings.settingsTab as TabId)?.focus();
+  }
+
+  close(): void {
+    if (!this.isOpen) return;
+    this.el.inert = true;
+    document.body.classList.remove('modal-open');
+    this.opener?.focus();
+    this.opener = null;
   }
 
   toggleOpen(): void {
-    this.setOpen(!this.app.settings.panelOpen);
+    if (this.isOpen) this.close();
+    else this.open();
   }
 
+  private showTab(id: TabId): void {
+    for (const [t, btn] of this.tabBtns) {
+      btn.setAttribute('aria-selected', String(t === id));
+      btn.tabIndex = t === id ? 0 : -1;
+    }
+    for (const [t, panel] of this.tabPanels) panel.hidden = t !== id;
+    if (this.app.settings.settingsTab !== id) {
+      this.app.settings.settingsTab = id;
+      this.app.saveSettings();
+    }
+  }
+
+  /** Arrow keys move between tabs (WAI-ARIA tabs pattern). */
+  private tabKeys(e: KeyboardEvent, id: TabId): void {
+    const i = TABS.findIndex((t) => t.id === id);
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    this.showTab(TABS[next].id);
+    this.tabBtns.get(TABS[next].id)?.focus();
+  }
+
+  /** Show a message in the sound tab; errors also pop up as a toast when the window is closed. */
   setStatus(text: string, error = false): void {
     this.status.textContent = text;
     this.status.classList.toggle('error', error);
+    if (text && !this.isOpen) {
+      this.toast.textContent = text;
+      this.toast.classList.toggle('error', error);
+      this.toast.classList.add('show');
+      clearTimeout(this.toastTimer);
+      this.toastTimer = window.setTimeout(() => this.toast.classList.remove('show'), 4000);
+    }
   }
 
   meter(b: Bands): void {
     const v = [b.bass, b.mid, b.treble];
-    this.meters.forEach((m, i) => (m.style.transform = `scaleY(${Math.min(1, v[i] * 1.4).toFixed(3)})`));
+    this.meters.forEach((m, i) => {
+      const scale = Math.min(1, v[i % 3] * 1.4).toFixed(3);
+      m.style.transform = i < 3 ? `scaleY(${scale})` : `scaleX(${scale})`;
+    });
   }
 
   /** Refresh pressed states; rebuild variant chips and source controls only when they change. */
@@ -326,7 +454,7 @@ export class Panel {
   private renderParams(mode: Mode): void {
     const s = this.app.settings;
     const params = mode.params ?? [];
-    this.paramsBox.hidden = params.length === 0;
+    this.paramsCard.hidden = params.length === 0;
     if (params.length === 0) return this.paramsBox.replaceChildren();
 
     const rows = params.map((p) => {
@@ -343,19 +471,7 @@ export class Panel {
         }
         return h('div', { class: 'param-options' }, h('span', {}, p.label), chips);
       }
-      return h(
-        'label',
-        { class: 'slider' },
-        h('span', {}, p.label),
-        h('input', {
-          type: 'range',
-          min: String(p.min ?? 0),
-          max: String(p.max ?? 1),
-          step: String(p.step ?? 0.01),
-          value: String(value),
-          oninput: (e: Event) => this.app.setParam(p.id, Number((e.target as HTMLInputElement).value)),
-        }),
-      );
+      return slider(p.label, p.min ?? 0, p.max ?? 1, p.step ?? 0.01, value, (v) => this.app.setParam(p.id, v));
     });
 
     const reset = h('button', { type: 'button', class: 'link-btn' }, 'Výchozí nastavení');
@@ -364,7 +480,7 @@ export class Panel {
       this.paramsFor = '';
       this.sync();
     });
-    this.paramsBox.replaceChildren(h('h3', {}, `Nastavení: ${mode.name}`), ...rows, reset);
+    this.paramsBox.replaceChildren(...rows, reset);
   }
 
   private async renderDevices(key: string): Promise<void> {
@@ -402,8 +518,4 @@ export class Panel {
     }
     this.sync();
   }
-}
-
-function section(title: string, ...children: Node[]): HTMLElement {
-  return h('section', {}, h('h2', {}, title), ...children);
 }

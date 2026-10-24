@@ -18,7 +18,8 @@ export interface Settings extends Effects {
   /** Speaker volume for demo and file sources, 0..1 */
   volume: number;
   inputDevice: string;
-  panelOpen: boolean;
+  /** Last open tab of the settings window */
+  settingsTab: string;
   /** Overlay image look: 0 palette tones, 1 outline, 2 original */
   imageStyle: number;
   /** Overlay (image and text) size, 0.2..1 */
@@ -37,7 +38,7 @@ export const DEFAULTS: Settings = {
   sensitivity: 1,
   volume: 0.6,
   inputDevice: '',
-  panelOpen: true,
+  settingsTab: 'mode',
   crt: false,
   grain: false,
   strobe: false,

@@ -149,6 +149,7 @@ const actions: PanelActions = {
     saveSettings(settings);
     void updateText();
   },
+  saveSettings: () => saveSettings(settings),
   setFont(id) {
     settings.font = id;
     changed();
@@ -157,7 +158,7 @@ const actions: PanelActions = {
 };
 
 const panel = new Panel(actions);
-document.body.append(panel.el, panel.opener);
+document.body.append(panel.toolbar, panel.el);
 audio.onchange = () => panel.sync();
 changed();
 void updateText();
@@ -215,6 +216,7 @@ window.addEventListener('drop', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && panel.isOpen) return panel.close();
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
   const target = e.target as HTMLElement;
   if (target.matches('input, select, textarea')) return;
@@ -247,8 +249,7 @@ window.addEventListener('keydown', (e) => {
     case 'f':
       return actions.toggleFullscreen();
     case 'h':
-      panel.toggleOpen();
-      return saveSettings(settings);
+      return panel.toggleOpen();
     case ' ':
       if (target.tagName === 'BUTTON') return; // let Space press the focused button
       e.preventDefault();
@@ -285,7 +286,7 @@ const start = h(
     icon('Play', 22),
     h('span', {}, 'Spustit'),
   ),
-  h('p', {}, 'Startuje s demo smyčkou. Pak si v panelu vyber mikrofon, soubor nebo zvuk systému.'),
+  h('p', {}, 'Startuje s demo smyčkou. Zdroj zvuku a vše ostatní najdeš v nastavení vpravo nahoře.'),
 );
 document.body.append(start);
 
