@@ -27,7 +27,7 @@ export function randomParam(p: ModeParam, rnd: Rnd): number {
 }
 
 /** What a jump may change */
-export type AutoParts = Pick<Settings, 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoImage' | 'autoSkip'>;
+export type AutoParts = Pick<Settings, 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoImage' | 'autoInvert' | 'autoSkip'>;
 
 /** Everything at once, for the random button */
 export const EVERYTHING: AutoParts = {
@@ -37,6 +37,7 @@ export const EVERYTHING: AutoParts = {
   autoPalette: true,
   autoFilter: true,
   autoImage: true,
+  autoInvert: true,
   autoSkip: [],
 };
 
@@ -73,6 +74,8 @@ export function autoStep(s: Settings, ctx: AutoContext, rnd: Rnd = Math.random, 
     const filters = Array.from({ length: ctx.filterCount - 1 }, (_, i) => i + 1);
     s.filter = s.filter !== 0 && rnd() < 0.5 ? 0 : pickOther(filters, s.filter, rnd);
   }
+  // Mostly the normal colors; every fifth jump on average flips them
+  if (parts.autoInvert) s.invert = rnd() < 0.2;
   if (parts.autoImage && ctx.imageChoices) {
     for (const [key, count] of Object.entries(ctx.imageChoices) as [ImageChoiceKey, number][]) {
       s[key] = pickOther(Array.from({ length: count }, (_, i) => i), s[key], rnd);

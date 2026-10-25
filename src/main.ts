@@ -272,8 +272,8 @@ function autoJump(): void {
 const history: string[] = [];
 
 function look(): string {
-  const { mode, variants, params, palette, filter, imageMotion } = settings;
-  return JSON.stringify({ mode, variants, params, palette, filter, imageMotion });
+  const { mode, variants, params, palette, filter, imageMotion, invert } = settings;
+  return JSON.stringify({ mode, variants, params, palette, filter, imageMotion, invert });
 }
 
 const NOTHING: AutoParts = {
@@ -283,6 +283,7 @@ const NOTHING: AutoParts = {
   autoPalette: false,
   autoFilter: false,
   autoImage: false,
+  autoInvert: false,
   autoSkip: [],
 };
 

@@ -64,6 +64,8 @@ export interface Settings extends Effects {
   autoFilter: boolean;
   /** Image motion on the beat (crop and position stay as set) */
   autoImage: boolean;
+  /** Sometimes flips the colors */
+  autoInvert: boolean;
   /** Mode ids the autopilot leaves out */
   autoSkip: string[];
 }
@@ -108,6 +110,7 @@ export const DEFAULTS: Settings = {
   autoPalette: false,
   autoFilter: false,
   autoImage: false,
+  autoInvert: false,
   autoSkip: [],
 };
 
