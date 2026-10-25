@@ -1,6 +1,6 @@
 import './style.css';
 import { AudioEngine } from './audio/AudioEngine';
-import { AUTO_EVERY, AutoClock, EVERYTHING, autoStep } from './autopilot';
+import { AUTO_EVERY, AutoClock, type AutoContext, EVERYTHING, autoStep } from './autopilot';
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode, Palette } from './modes/types';
@@ -181,7 +181,7 @@ async function exportInBackground(format: ExportFormat): Promise<void> {
       scene(a, t, dt) {
         const calm = applyStructure(a, structure, s, t, dt);
         if (s.auto && calm < 0.5 && clock.tick(a.beat, a.level, dt, s.autoBeats)) {
-          autoStep(s, { modes: MODES, palettes: PALETTES, filterCount: FILTERS.length });
+          autoStep(s, AUTO_CONTEXT);
         }
         return sceneOf(s);
       },
@@ -248,12 +248,20 @@ async function stopExport(): Promise<void> {
   panel.setStatus(r.type.startsWith('video/mp4') ? 'The video is downloaded.' : 'The video is downloaded (WebM, this browser cannot record MP4).');
 }
 
+/** What the autopilot and the random button may pick from */
+const AUTO_CONTEXT: AutoContext = {
+  modes: MODES,
+  palettes: PALETTES,
+  filterCount: FILTERS.length,
+  imageChoices: Object.fromEntries(IMAGE_CHOICES.filter(([key]) => key !== 'imageStyle').map(([key, , names]) => [key, names.length])),
+};
+
 const autoClock = new AutoClock();
 
 /** Autopilot jump: new mode, variant, settings... as allowed in the Autopilot tab. */
 function autoJump(): void {
   autoClock.reset();
-  autoStep(settings, { modes: MODES, palettes: PALETTES, filterCount: FILTERS.length });
+  autoStep(settings, AUTO_CONTEXT);
   panel.refreshParams();
   changed();
 }
@@ -262,8 +270,8 @@ function autoJump(): void {
 const history: string[] = [];
 
 function look(): string {
-  const { mode, variants, params, palette, filter } = settings;
-  return JSON.stringify({ mode, variants, params, palette, filter });
+  const { mode, variants, params, palette, filter, imageShape, imageMotion, imagePos } = settings;
+  return JSON.stringify({ mode, variants, params, palette, filter, imageShape, imageMotion, imagePos });
 }
 
 /** Random button and scroll wheel: everything new, like flipping through a feed. */
@@ -271,7 +279,7 @@ function randomize(): void {
   history.push(look());
   if (history.length > 100) history.shift();
   autoClock.reset();
-  autoStep(settings, { modes: MODES, palettes: PALETTES, filterCount: FILTERS.length }, Math.random, EVERYTHING);
+  autoStep(settings, AUTO_CONTEXT, Math.random, EVERYTHING);
   panel.refreshParams();
   changed();
 }

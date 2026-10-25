@@ -58,6 +58,8 @@ export interface Settings extends Effects {
   autoParams: boolean;
   autoPalette: boolean;
   autoFilter: boolean;
+  /** Image crop, motion and position */
+  autoImage: boolean;
   /** Mode ids the autopilot leaves out */
   autoSkip: string[];
 }
@@ -99,6 +101,7 @@ export const DEFAULTS: Settings = {
   autoParams: true,
   autoPalette: false,
   autoFilter: false,
+  autoImage: false,
   autoSkip: [],
 };
 

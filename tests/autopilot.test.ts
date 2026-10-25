@@ -88,6 +88,24 @@ describe('autoStep', () => {
   });
 });
 
+describe('autoStep image', () => {
+  it('changes crop, motion and position only when allowed', () => {
+    const imgCtx = { ...ctx, imageChoices: { imageShape: 5, imageMotion: 5, imagePos: 4 } };
+    const off = parseSettings({ autoImage: false });
+    autoStep(off, imgCtx, seq(3));
+    expect([off.imageShape, off.imageMotion, off.imagePos]).toEqual([0, 1, 0]);
+    const on = parseSettings({ autoImage: true });
+    const rnd = seq(7);
+    for (let i = 0; i < 20; i++) {
+      const before = [on.imageShape, on.imageMotion, on.imagePos];
+      autoStep(on, imgCtx, rnd);
+      expect(on.imageShape).not.toBe(before[0]);
+      expect(on.imagePos).toBeLessThan(4);
+      expect(on.imageMotion).toBeLessThan(5);
+    }
+  });
+});
+
 describe('AutoClock', () => {
   it('jumps after the given number of kicks', () => {
     const c = new AutoClock();

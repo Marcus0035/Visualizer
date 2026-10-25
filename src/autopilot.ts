@@ -27,7 +27,7 @@ export function randomParam(p: ModeParam, rnd: Rnd): number {
 }
 
 /** What a jump may change */
-export type AutoParts = Pick<Settings, 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoSkip'>;
+export type AutoParts = Pick<Settings, 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoImage' | 'autoSkip'>;
 
 /** Everything at once, for the random button */
 export const EVERYTHING: AutoParts = {
@@ -36,6 +36,7 @@ export const EVERYTHING: AutoParts = {
   autoParams: true,
   autoPalette: true,
   autoFilter: true,
+  autoImage: true,
   autoSkip: [],
 };
 
@@ -43,7 +44,11 @@ export interface AutoContext {
   modes: readonly Mode[];
   palettes: readonly Palette[];
   filterCount: number;
+  /** Number of choices per image setting (crop, motion, position) */
+  imageChoices?: Partial<Record<ImageChoiceKey, number>>;
 }
+
+export type ImageChoiceKey = 'imageShape' | 'imageMotion' | 'imagePos';
 
 /** One jump: changes the given parts of `s` (by default the ones allowed for the autopilot). */
 export function autoStep(s: Settings, ctx: AutoContext, rnd: Rnd = Math.random, parts: AutoParts = s): void {
@@ -67,6 +72,11 @@ export function autoStep(s: Settings, ctx: AutoContext, rnd: Rnd = Math.random, 
     // Every other jump on average goes back to a clean picture
     const filters = Array.from({ length: ctx.filterCount - 1 }, (_, i) => i + 1);
     s.filter = s.filter !== 0 && rnd() < 0.5 ? 0 : pickOther(filters, s.filter, rnd);
+  }
+  if (parts.autoImage && ctx.imageChoices) {
+    for (const [key, count] of Object.entries(ctx.imageChoices) as [ImageChoiceKey, number][]) {
+      s[key] = pickOther(Array.from({ length: count }, (_, i) => i), s[key], rnd);
+    }
   }
 }
 
