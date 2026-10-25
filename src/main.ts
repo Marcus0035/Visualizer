@@ -1,6 +1,6 @@
 import './style.css';
 import { AudioEngine } from './audio/AudioEngine';
-import { AUTO_EVERY, AutoClock, type AutoContext, EVERYTHING, autoStep } from './autopilot';
+import { AUTO_EVERY, AutoClock, type AutoContext, type AutoParts, EVERYTHING, autoStep } from './autopilot';
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode, Palette } from './modes/types';
@@ -15,7 +15,7 @@ import { FILTERS } from './render/filters';
 import { Renderer, type Scene } from './render/Renderer';
 import { DEFAULTS, type Effects, type Settings, loadSettings, paramValue, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
-import { IMAGE_CHOICES, Panel, type PanelActions } from './ui/Panel';
+import { IMAGE_CHOICES, Panel, type PanelActions, type RandomPart } from './ui/Panel';
 
 const settings = loadSettings();
 if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
@@ -274,12 +274,35 @@ function look(): string {
   return JSON.stringify({ mode, variants, params, palette, filter, imageMotion });
 }
 
+const NOTHING: AutoParts = {
+  autoMode: false,
+  autoVariant: false,
+  autoParams: false,
+  autoPalette: false,
+  autoFilter: false,
+  autoImage: false,
+  autoSkip: [],
+};
+
+const PART_FLAGS: Record<RandomPart, Partial<AutoParts>> = {
+  mode: { autoMode: true },
+  settings: { autoVariant: true, autoParams: true },
+  color: { autoPalette: true },
+  filter: { autoFilter: true },
+};
+
 /** Random button and scroll wheel: everything new, like flipping through a feed. */
-function randomize(): void {
+function randomize(part?: RandomPart): void {
   history.push(look());
   if (history.length > 100) history.shift();
   autoClock.reset();
-  autoStep(settings, AUTO_CONTEXT, Math.random, EVERYTHING);
+  if (part === 'filter') {
+    // The filter button always lands on a filter, never on a clean picture
+    const filters = Array.from({ length: FILTERS.length - 1 }, (_, i) => i + 1);
+    settings.filter = filters.length > 1 ? filters.filter((f) => f !== settings.filter)[Math.floor(Math.random() * (filters.length - 1))] : filters[0];
+  } else {
+    autoStep(settings, AUTO_CONTEXT, Math.random, part ? { ...NOTHING, ...PART_FLAGS[part] } : EVERYTHING);
+  }
   panel.refreshParams();
   changed();
 }
@@ -416,7 +439,7 @@ const actions: PanelActions = {
     changed();
   },
   autoNow: () => autoJump(),
-  randomize: () => randomize(),
+  randomize: (part) => randomize(part),
   back: () => back(),
   canGoBack: () => history.length > 0,
   setFont(id) {

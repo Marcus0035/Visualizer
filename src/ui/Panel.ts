@@ -53,10 +53,13 @@ export interface PanelActions {
   setAutoPart(key: AutoPart, on: boolean): void;
   setAutoSkip(modeId: string, skip: boolean): void;
   autoNow(): void;
-  randomize(): void;
+  randomize(part?: RandomPart): void;
   back(): void;
   canGoBack(): boolean;
 }
+
+/** What a single random button re-rolls */
+export type RandomPart = 'mode' | 'settings' | 'color' | 'filter';
 
 export type AutoPart = 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoImage';
 
@@ -294,6 +297,16 @@ export class Panel {
         h('span', {}, 'Random'),
       ),
       this.backBtn,
+      ...(
+        [
+          ['mode', 'LayoutGrid', 'Random mode'],
+          ['settings', 'Shuffle', 'Random variant and settings'],
+          ['color', 'Palette', 'Random color'],
+          ['filter', 'Film', 'Random filter'],
+        ] as const
+      ).map(([part, name, title]) =>
+        h('button', { class: 'tool-btn', title, 'aria-label': title, onclick: () => app.randomize(part) }, icon(name, 18)),
+      ),
     );
 
     // Sound
