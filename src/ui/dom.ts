@@ -42,6 +42,8 @@ import {
   Tv,
   Gamepad2,
   Plus,
+  Factory,
+  Eye,
   createElement,
   type IconNode,
 } from 'lucide';
@@ -55,6 +57,8 @@ const ICONS: Record<string, IconNode> = {
   Tv,
   Gamepad2,
   Plus,
+  Factory,
+  Eye,
   Activity,
   Binary,
   ChartColumn,

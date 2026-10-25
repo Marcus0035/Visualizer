@@ -1,5 +1,7 @@
 import { arcade } from './arcade';
+import { industrial } from './industrial';
 import { lava } from './lava';
+import { lsd } from './lsd';
 import { matrix } from './matrix';
 import { motif } from './motif';
 import { oscilloscope } from './oscilloscope';
@@ -11,4 +13,4 @@ import { tv } from './tv';
 import type { Mode } from './types';
 
 /** Order defines the number-key shortcuts (1..n). */
-export const MODES: Mode[] = [techno, oscilloscope, plasma, matrix, motif, lava, tv, arcade, particles, tiles];
+export const MODES: Mode[] = [techno, oscilloscope, plasma, matrix, motif, lava, tv, arcade, particles, tiles, industrial, lsd];
