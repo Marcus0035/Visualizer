@@ -32,7 +32,8 @@ export interface PanelActions {
   hasImage(): boolean;
   pickImage(): void;
   removeImage(): void;
-  setImageStyle(index: number): void;
+  setImageChoice(key: ImageChoice, index: number): void;
+  setImageAmount(key: 'imageOpacity' | 'imageGlow', value: number): void;
   setOverlaySize(value: number): void;
   setText(text: string): void;
   setFont(id: string): void;
@@ -64,7 +65,15 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
-const IMAGE_STYLES = ['Barvy palety', 'Obrys', 'Originál'];
+/** Image settings shown as chips; the index is the stored value */
+export const IMAGE_CHOICES = [
+  ['imageStyle', 'Vzhled', ['Barvy palety', 'Obrys', 'Originál']],
+  ['imageShape', 'Ořez', ['Původní', 'Kruh', 'Čtverec', 'Šestiúhelník', 'Srdce']],
+  ['imageMotion', 'Pohyb na beat', ['Klid', 'Pulz', 'Poskok', 'Otáčení', 'Třes']],
+  ['imagePos', 'Poloha', ['Uprostřed', 'Nahoře', 'Dole', 'V rohu']],
+] as const;
+
+export type ImageChoice = (typeof IMAGE_CHOICES)[number][0];
 
 const SOURCES: { kind: SourceKind; label: string; icon: string }[] = [
   { kind: 'demo', label: 'Demo', icon: 'Music' },
@@ -137,7 +146,7 @@ export class Panel {
   private readonly fxSetters = new Map<keyof Effects, (on: boolean) => void>();
   private readonly paramsBox = h('div', { class: 'params' });
   private readonly paramsCard: HTMLElement;
-  private readonly imageStyleBtns: HTMLButtonElement[] = [];
+  private readonly imageChoiceBtns = new Map<ImageChoice, HTMLButtonElement[]>();
   private readonly fontBtns = new Map<string, HTMLButtonElement>();
   private readonly removeImageBtn: HTMLButtonElement;
   private readonly filterBtns: HTMLButtonElement[] = [];
@@ -265,11 +274,12 @@ export class Panel {
       { class: 'icon-btn', title: 'Odebrat obrázek', 'aria-label': 'Odebrat obrázek', onclick: () => app.removeImage() },
       icon('Trash2'),
     );
-    const imageStyles = h('div', { class: 'chips' });
-    IMAGE_STYLES.forEach((name, i) => {
-      const b = h('button', { type: 'button', class: 'chip', onclick: () => app.setImageStyle(i) }, name);
-      this.imageStyleBtns.push(b);
-      imageStyles.append(b);
+    const imageChoices = IMAGE_CHOICES.flatMap(([key, title, names]) => {
+      const chips = h('div', { class: 'chips' });
+      const btns = names.map((name, i) => h('button', { type: 'button', class: 'chip', onclick: () => app.setImageChoice(key, i) }, name));
+      this.imageChoiceBtns.set(key, btns);
+      chips.append(...btns);
+      return [h('h3', {}, title), chips];
     });
     let typing = 0;
     const textInput = h(
@@ -389,8 +399,9 @@ export class Panel {
             h('button', { type: 'button', class: 'btn', onclick: () => app.pickImage() }, icon('ImagePlus'), h('span', {}, 'Vybrat obrázek')),
             this.removeImageBtn,
           ),
-          h('h3', {}, 'Vzhled'),
-          imageStyles,
+          ...imageChoices,
+          slider('Viditelnost', 0.1, 1, 0.01, s.imageOpacity, (v) => app.setImageAmount('imageOpacity', v)),
+          slider('Záře kolem', 0, 1, 0.01, s.imageGlow, (v) => app.setImageAmount('imageGlow', v)),
           h('small', { class: 'hint' }, 'Obrázek jde i přetáhnout do okna.'),
         ),
         card('Text', textInput, h('h3', {}, 'Písmo'), fonts),
@@ -564,7 +575,7 @@ export class Panel {
     for (const [id, b] of this.modeBtns) b.setAttribute('aria-pressed', String(id === s.mode));
     for (const [id, b] of this.paletteBtns) b.setAttribute('aria-pressed', String(id === s.palette));
     for (const [k, set] of this.fxSetters) set(s[k]);
-    this.imageStyleBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.imageStyle)));
+    for (const [key, btns] of this.imageChoiceBtns) btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s[key])));
     for (const [id, b] of this.fontBtns) b.setAttribute('aria-pressed', String(id === s.font));
     this.removeImageBtn.hidden = !this.app.hasImage();
     this.filterBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.filter)));

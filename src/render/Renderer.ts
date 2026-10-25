@@ -150,33 +150,74 @@ export class Renderer {
   }
 
   /** Mip level matching how much the overlay is shrunk on screen. */
-  private lod(o: Overlay, rect: number[]): number {
+  private lod(texWidth: number, rect: number[]): number {
     const shownPx = rect[2] * 2 * this.width;
-    return Math.max(0, Math.log2(o.width / Math.max(1, shownPx)));
+    return Math.max(0, Math.log2(texWidth / Math.max(1, shownPx)));
   }
 
   /**
-   * Overlay boxes as [centerX, centerY, halfW, halfH] in 0..1 screen units (y up).
-   * Contain-fit, so the image keeps its aspect ratio; image above the text when both are shown.
+   * Overlay boxes as [centerX, centerY, halfW, halfH] in 0..1 screen units (y up), plus the
+   * image angle. Contain-fit, so the image keeps its aspect ratio (a square crop for shapes);
+   * image above the text when both are shown, text moves up when the image sits at the bottom.
    */
-  private overlayRects(size: number, a: AudioFrame): { image: number[]; text: number[] } {
+  private overlayRects(fx: Settings, a: AudioFrame, time: number): { image: number[]; text: number[]; angle: number } {
     const W = this.width;
     const H = this.height;
-    const boost = 1 + a.bands.bass * 0.06 + a.pulse * 0.04;
-    const fit = (o: Overlay, cy: number, bw: number, bh: number) => {
-      const k = Math.min(bw / o.width, bh / o.height);
-      return [0.5, cy, ((o.width * k) / 2 / W) * boost, ((o.height * k) / 2 / H) * boost];
+    const size = fx.overlaySize;
+    const img = this.image;
+    const side = Math.min(img.width, img.height);
+    const iw = fx.imageShape > 0 ? side : img.width;
+    const ih = fx.imageShape > 0 ? side : img.height;
+    const fit = (w: number, h: number, cx: number, cy: number, bw: number, bh: number, boost = 1) => {
+      const k = Math.min(bw / w, bh / h);
+      return [cx, cy, ((w * k) / 2 / W) * boost, ((h * k) / 2 / H) * boost];
     };
-    if (this.image.present && this.text.present) {
-      return {
-        image: fit(this.image, 0.6, W * size, H * size * 0.6),
-        text: fit(this.text, 0.17, W * size * 0.9, H * size * 0.2),
-      };
+
+    // Motion on the beat: offset, scale and angle
+    const p2 = a.pulse * a.pulse;
+    const rnd = (n: number) => {
+      const x = Math.sin(this.kicks * 12.9898 + n * 78.233) * 43758.5453;
+      return x - Math.floor(x) - 0.5;
+    };
+    let boost = 1;
+    let dx = 0;
+    let dy = 0;
+    let angle = 0;
+    if (fx.imageMotion === 1) boost = 1 + a.bands.bass * 0.06 + a.pulse * 0.04;
+    else if (fx.imageMotion === 2) {
+      dy = p2 * 0.05;
+      boost = 1 + a.pulse * 0.03;
+    } else if (fx.imageMotion === 3) {
+      angle = time * 0.4 + p2 * 0.3;
+      boost = 1 + a.bands.bass * 0.04;
+    } else if (fx.imageMotion === 4) {
+      dx = rnd(1) * 0.04 * a.pulse;
+      dy = rnd(2) * 0.04 * a.pulse;
+      angle = rnd(3) * 0.2 * a.pulse;
     }
-    return {
-      image: fit(this.image, 0.5, W * size, H * size * 0.9),
-      text: fit(this.text, 0.5, W * size * 0.95, H * size * 0.4),
-    };
+
+    const both = img.present && this.text.present;
+    let image: number[];
+    let textY = both ? 0.17 : 0.5;
+    if (fx.imagePos === 3) {
+      // Small logo in the bottom-right corner
+      const r = fit(iw, ih, 0, 0, W * size * 0.3, H * size * 0.3, boost);
+      const m = 0.03;
+      image = [1 - r[2] - m * (H / W), r[3] + m, r[2], r[3]];
+      if (both) textY = 0.5;
+    } else if (fx.imagePos === 1) {
+      image = fit(iw, ih, 0.5, both ? 0.68 : 0.7, W * size, H * size * 0.5, boost);
+    } else if (fx.imagePos === 2) {
+      image = fit(iw, ih, 0.5, 0.3, W * size, H * size * 0.5, boost);
+      if (both) textY = 0.8;
+    } else {
+      image = both ? fit(iw, ih, 0.5, 0.6, W * size, H * size * 0.6, boost) : fit(iw, ih, 0.5, 0.5, W * size, H * size * 0.9, boost);
+    }
+    image[0] += dx * (H / W);
+    image[1] += dy;
+    const textH = both && fx.imagePos !== 3 ? 0.2 : 0.4;
+    const text = fit(this.text.width, this.text.height, 0.5, textY, W * size * (both ? 0.9 : 0.95), H * size * textH);
+    return { image, text, angle };
   }
 
   private texture(filter: number): WebGLTexture {
@@ -301,16 +342,22 @@ export class Renderer {
     gl.uniform1i(p.loc('uFilter'), fx.filter);
     gl.uniform1f(p.loc('uFilterAmt'), Math.min(1, Math.max(0, fx.filterAmount)) * (fx.filterBeat ? 0.7 + 0.6 * audio.pulse : 1));
 
-    const rects = this.overlayRects(fx.overlaySize, audio);
+    const rects = this.overlayRects(fx, audio, time);
     // A mode that builds its motif from the image does not also show the picture itself
     const showImage = this.image.present && !(mode.kind === 'gl' && mode.usesImage);
     gl.uniform1f(p.loc('uHasImage'), showImage ? 1 : 0);
     gl.uniform1f(p.loc('uImageAlpha'), this.image.hasAlpha ? 1 : 0);
     gl.uniform1i(p.loc('uImageStyle'), fx.imageStyle);
+    gl.uniform1i(p.loc('uImageShape'), fx.imageShape);
+    const side = Math.min(this.image.width, this.image.height);
+    gl.uniform2f(p.loc('uImageCrop'), fx.imageShape > 0 ? side / this.image.width : 1, fx.imageShape > 0 ? side / this.image.height : 1);
+    gl.uniform1f(p.loc('uImageAngle'), rects.angle);
+    gl.uniform1f(p.loc('uImageOpacity'), fx.imageOpacity);
+    gl.uniform1f(p.loc('uImageGlow'), fx.imageGlow);
     gl.uniform4fv(p.loc('uImageRect'), rects.image);
     gl.uniform2f(p.loc('uImageTexel'), 1 / this.image.width, 1 / this.image.height);
-    gl.uniform1f(p.loc('uImageLod'), this.lod(this.image, rects.image));
-    gl.uniform1f(p.loc('uTextLod'), this.lod(this.text, rects.text));
+    gl.uniform1f(p.loc('uImageLod'), this.lod(fx.imageShape > 0 ? side : this.image.width, rects.image));
+    gl.uniform1f(p.loc('uTextLod'), this.lod(this.text.width, rects.text));
     gl.uniform1f(p.loc('uHasText'), this.text.present ? 1 : 0);
     gl.uniform4fv(p.loc('uTextRect'), rects.text);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

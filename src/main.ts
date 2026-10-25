@@ -9,9 +9,9 @@ import { IMAGE_PALETTE_ID, paletteFromCanvas } from './overlay/imagePalette';
 import { FONTS, renderText } from './overlay/text';
 import { FILTERS } from './render/filters';
 import { Renderer } from './render/Renderer';
-import { type Effects, loadSettings, paramValue, saveSettings, variantOf } from './settings';
+import { DEFAULTS, type Effects, loadSettings, paramValue, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
-import { Panel, type PanelActions } from './ui/Panel';
+import { IMAGE_CHOICES, Panel, type PanelActions } from './ui/Panel';
 
 const settings = loadSettings();
 if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
@@ -24,6 +24,11 @@ if (settings.palette !== IMAGE_PALETTE_ID && !PALETTES.some((p) => p.id === sett
 if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
 if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
 settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
+for (const [key, , names] of IMAGE_CHOICES) {
+  if (!Number.isInteger(settings[key]) || settings[key] < 0 || settings[key] >= names.length) settings[key] = DEFAULTS[key];
+}
+settings.imageOpacity = Math.min(1, Math.max(0.1, settings.imageOpacity));
+settings.imageGlow = Math.min(1, Math.max(0, settings.imageGlow));
 if (!AUTO_EVERY.includes(settings.autoBeats)) settings.autoBeats = 1;
 settings.autoSkip = [...new Set(settings.autoSkip.filter((id) => MODES.some((m) => m.id === id)))];
 // The autopilot needs at least one mode to pick from
@@ -199,9 +204,13 @@ const actions: PanelActions = {
     if (settings.palette === IMAGE_PALETTE_ID) settings.palette = PALETTES[0].id;
     changed();
   },
-  setImageStyle(i) {
-    settings.imageStyle = i;
+  setImageChoice(key, i) {
+    settings[key] = i;
     changed();
+  },
+  setImageAmount(key, v) {
+    settings[key] = v;
+    saveSettings(settings);
   },
   setOverlaySize(v) {
     settings.overlaySize = v;
@@ -402,6 +411,20 @@ window.addEventListener('keydown', wake);
 wake();
 
 // Browsers only allow audio after a user gesture
+/** Local dev server: start with its track (vite.config.ts) instead of the demo loop. */
+async function useDevAudio(): Promise<boolean> {
+  try {
+    const res = await fetch('/dev-audio');
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const name = decodeURIComponent(res.headers.get('X-Audio-Name') ?? 'skladba');
+    await audio.useFile(new File([blob], name, { type: blob.type }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const start = h(
   'div',
   { class: 'start' },
@@ -412,7 +435,7 @@ const start = h(
       type: 'button',
       onclick: async () => {
         start.remove();
-        await audio.useDemo();
+        if (!(import.meta.env.DEV && (await useDevAudio()))) await audio.useDemo();
         panel.sync();
       },
     },

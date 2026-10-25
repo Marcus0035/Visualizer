@@ -22,6 +22,16 @@ export interface Settings extends Effects {
   settingsTab: string;
   /** Overlay image look: 0 palette tones, 1 outline, 2 original */
   imageStyle: number;
+  /** Image crop: 0 original, 1 circle, 2 square, 3 hexagon, 4 heart */
+  imageShape: number;
+  /** Image motion: 0 still, 1 pulse, 2 bounce, 3 spin, 4 shake */
+  imageMotion: number;
+  /** Image position: 0 center, 1 top, 2 bottom, 3 corner */
+  imagePos: number;
+  /** 0..1 */
+  imageOpacity: number;
+  /** Glow around the image, 0..1 */
+  imageGlow: number;
   /** Overlay (image and text) size, 0.2..1 */
   overlaySize: number;
   text: string;
@@ -62,6 +72,11 @@ export const DEFAULTS: Settings = {
   strobe: false,
   glitch: false,
   imageStyle: 0,
+  imageShape: 0,
+  imageMotion: 1,
+  imagePos: 0,
+  imageOpacity: 1,
+  imageGlow: 0,
   overlaySize: 0.7,
   text: '',
   font: 'anton',

@@ -60,6 +60,11 @@ uniform int uImageStyle;
 uniform vec4 uImageRect;  // center xy, half size zw (uv units)
 uniform vec2 uImageTexel;
 uniform float uImageLod;  // explicit mip level: implicit derivatives break in branches and glitch slices
+uniform int uImageShape;  // 0 original, 1 circle, 2 square, 3 hexagon, 4 heart
+uniform vec2 uImageCrop;  // texture span of the shown part (center crop for shapes)
+uniform float uImageAngle;
+uniform float uImageOpacity;
+uniform float uImageGlow;
 uniform sampler2D uText;
 uniform float uHasText;
 uniform vec4 uTextRect;
@@ -86,36 +91,93 @@ float imageLuma(vec2 t) {
   return uImageAlpha > 0.5 ? s.a * (0.5 + 0.5 * luma(straight(s))) : luma(s.rgb);
 }
 
-// Premultiplied color + alpha of the user image
+// Image box coordinates 0..1 (unbounded), turned by uImageAngle around the box center
+vec2 imageLocal(vec2 uv) {
+  float aspect = uRes.x / uRes.y;
+  vec2 d = uv - uImageRect.xy;
+  d.x *= aspect;
+  float c = cos(uImageAngle), s = sin(uImageAngle);
+  d = mat2(c, -s, s, c) * d;
+  d.x /= aspect;
+  return d / (2.0 * uImageRect.zw) + 0.5;
+}
+
+float dot2(vec2 v) { return dot(v, v); }
+
+// Signed distance to the crop shape in box units (-1..1 across), negative inside
+float shapeDist(vec2 t) {
+  vec2 q = (t - 0.5) * 2.0;
+  if (uImageShape == 1) return length(q) - 1.0;
+  if (uImageShape == 2) {
+    vec2 b = abs(q) - vec2(0.82);
+    return length(max(b, 0.0)) + min(max(b.x, b.y), 0.0) - 0.16;
+  }
+  if (uImageShape == 3) {
+    const vec3 k = vec3(-0.866025404, 0.5, 0.577350269);
+    vec2 p = abs(q.yx);
+    p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
+    p -= vec2(clamp(p.x, -k.z * 0.92, k.z * 0.92), 0.92);
+    return length(p) * sign(p.y);
+  }
+  if (uImageShape == 4) {
+    vec2 p = vec2(abs(q.x) * 0.62, (q.y + 0.95) * 0.55);
+    float d = p.y + p.x > 1.0
+      ? sqrt(dot2(p - vec2(0.25, 0.75))) - 0.353553
+      : sqrt(min(dot2(p - vec2(0.0, 1.0)), dot2(p - 0.5 * max(p.x + p.y, 0.0)))) * sign(p.x - p.y);
+    return d / 0.6;
+  }
+  vec2 b = abs(q) - 1.0;
+  return length(max(b, 0.0)) + min(max(b.x, b.y), 0.0);
+}
+
+// Premultiplied color + alpha of the user image, with its glow around it
 vec4 imageLayer(vec2 uv) {
-  vec2 t = local(uv, uImageRect);
-  if (!inside(t)) return vec4(0.0);
-  vec4 s = textureLod(uImage, t, uImageLod);
-  float edge = min(min(t.x, 1.0 - t.x), min(t.y, 1.0 - t.y));
-  // Photos fade out towards the edges (per axis, so the corners stay round instead of creased)
-  vec2 fx = smoothstep(0.0, 0.12, t) * smoothstep(0.0, 0.12, 1.0 - t);
-  float mask = uImageAlpha > 0.5 ? s.a : fx.x * fx.y;
+  vec2 t = imageLocal(uv);
+  float dist = shapeDist(t);
+  // Glow reaches about a fifth of the box outside the shape
+  if (dist > 0.6) return vec4(0.0);
+  vec2 tex = 0.5 + (t - 0.5) * uImageCrop;
+  vec4 s = textureLod(uImage, clamp(tex, 0.0, 1.0), uImageLod);
+  float mask;
+  if (uImageShape == 0) {
+    // Photos fade out towards the edges (per axis, so the corners stay round instead of creased)
+    vec2 fx = smoothstep(0.0, 0.12, t) * smoothstep(0.0, 0.12, 1.0 - t);
+    mask = inside(t) ? (uImageAlpha > 0.5 ? s.a : fx.x * fx.y) : 0.0;
+  } else {
+    mask = smoothstep(0.015, -0.015, dist) * (uImageAlpha > 0.5 ? s.a : 1.0);
+  }
   float boost = 0.85 + 0.35 * uPulse;
 
+  // Halo: logos glow along their own outline (blurred alpha), everything else around the shape
+  float halo = uImageShape == 0 && uImageAlpha > 0.5 && inside(t)
+    ? textureLod(uImage, clamp(tex, 0.0, 1.0), uImageLod + 4.0).a * (1.0 - s.a)
+    : exp(-max(dist, 0.0) * 9.0) * step(0.0, dist);
+  vec3 glow = uA * (1.0 + uBass) * halo * uImageGlow * (0.6 + 0.8 * uPulse);
+
+  vec3 col;
+  float a;
   if (uImageStyle == 1) {
     // Glowing outline (Sobel on brightness)
     vec2 d = uImageTexel * 1.5 * exp2(uImageLod);
-    float tl = imageLuma(t + vec2(-d.x, d.y)), tc = imageLuma(t + vec2(0.0, d.y)), tr = imageLuma(t + d);
-    float ml = imageLuma(t - vec2(d.x, 0.0)), mr = imageLuma(t + vec2(d.x, 0.0));
-    float bl = imageLuma(t - d), bc = imageLuma(t - vec2(0.0, d.y)), br = imageLuma(t + vec2(d.x, -d.y));
+    float tl = imageLuma(tex + vec2(-d.x, d.y)), tc = imageLuma(tex + vec2(0.0, d.y)), tr = imageLuma(tex + d);
+    float ml = imageLuma(tex - vec2(d.x, 0.0)), mr = imageLuma(tex + vec2(d.x, 0.0));
+    float bl = imageLuma(tex - d), bc = imageLuma(tex - vec2(0.0, d.y)), br = imageLuma(tex + vec2(d.x, -d.y));
     float gx = (tr + 2.0 * mr + br) - (tl + 2.0 * ml + bl);
     float gy = (tl + 2.0 * tc + tr) - (bl + 2.0 * bc + br);
-    float e = smoothstep(0.1, 0.5, length(vec2(gx, gy))) * smoothstep(0.0, 0.05, edge);
-    vec3 col = (uA * (1.0 + uBass * 1.5) + uC * e * 0.6) * e * boost;
-    return vec4(col, e * 0.6);
+    float edge = min(min(t.x, 1.0 - t.x), min(t.y, 1.0 - t.y));
+    float e = smoothstep(0.1, 0.5, length(vec2(gx, gy))) * (uImageShape == 0 ? smoothstep(0.0, 0.05, edge) : smoothstep(0.015, -0.015, dist));
+    col = (uA * (1.0 + uBass * 1.5) + uC * e * 0.6) * e * boost;
+    a = e * 0.6;
+  } else {
+    vec3 rgb = straight(s);
+    float l = luma(rgb);
+    col = uImageStyle == 0
+      ? (l < 0.5 ? mix(uBg, uA, l * 2.0) : mix(uA, uC, l * 2.0 - 1.0))
+      : rgb;
+    col *= boost * mask;
+    a = mask;
   }
-
-  vec3 rgb = straight(s);
-  float l = luma(rgb);
-  vec3 col = uImageStyle == 0
-    ? (l < 0.5 ? mix(uBg, uA, l * 2.0) : mix(uA, uC, l * 2.0 - 1.0))
-    : rgb;
-  return vec4(col * boost * mask, mask);
+  return vec4(col * uImageOpacity + glow, a * uImageOpacity);
 }
 
 float textAlpha(vec2 uv) {
