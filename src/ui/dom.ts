@@ -44,6 +44,7 @@ import {
   Plus,
   Factory,
   Eye,
+  Clapperboard,
   createElement,
   type IconNode,
 } from 'lucide';
@@ -59,6 +60,7 @@ const ICONS: Record<string, IconNode> = {
   Plus,
   Factory,
   Eye,
+  Clapperboard,
   Activity,
   Binary,
   ChartColumn,

@@ -838,6 +838,10 @@ input[type='range'] {
   max-width: 360px;
 }
 
+.start .start-note {
+  color: var(--accent);
+}
+
 .start-btn {
   display: flex;
   align-items: center;
@@ -1084,4 +1088,248 @@ input[type='range'] {
 
 .export-background {
   padding: 14px 20px 0;
+}
+
+/* Timeline editor */
+.timeline {
+  --tl-mode: #4c8dff;
+  --tl-filter: #b45cff;
+  --tl-palette: #ff9a3d;
+  --tl-invert: #9aa3b5;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  height: min(330px, 55vh);
+  border-top: 1px solid var(--line);
+  background: rgba(10, 10, 14, 0.94);
+  backdrop-filter: blur(14px);
+}
+
+.timeline[hidden] {
+  display: none;
+}
+
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tl-time {
+  min-width: 90px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-inspect {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.tl-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.tl-zoom input {
+  width: 90px;
+}
+
+.tl-body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 210px 64px 1fr;
+  min-height: 0;
+}
+
+.tl-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  margin: 0;
+  padding: 0 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.tl-library {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  border-right: 1px solid var(--line);
+}
+
+.tl-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tl-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.tl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: grab;
+}
+
+.tl-item:hover {
+  background: var(--hover);
+}
+
+.tl-item .swatch {
+  width: 16px;
+  height: 16px;
+}
+
+.tl-labels {
+  border-right: 1px solid var(--line);
+}
+
+.tl-label {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tl-scroll {
+  overflow: auto;
+  min-width: 0;
+}
+
+.tl-inner {
+  position: relative;
+}
+
+.tl-ruler {
+  position: relative;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.tl-ruler span {
+  position: absolute;
+  top: 5px;
+  padding-left: 4px;
+  border-left: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.tl-track {
+  position: relative;
+  border-top: 1px solid var(--line);
+}
+
+.tl-track.over {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tl-clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  min-width: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: var(--tl-mode);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.tl-clip.filter {
+  background: var(--tl-filter);
+}
+
+.tl-clip.palette {
+  background: var(--tl-palette);
+  color: #1a0d00;
+}
+
+.tl-clip.invert {
+  background: var(--tl-invert);
+  color: #10131a;
+}
+
+.tl-clip.selected {
+  outline: 2px solid #fff;
+}
+
+.tl-clip span {
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.tl-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.tl-handle.l {
+  left: 0;
+}
+
+.tl-handle.r {
+  right: 0;
+}
+
+.tl-handle:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.timeline-open .toolbar.left {
+  top: 14px;
 }

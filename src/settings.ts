@@ -1,4 +1,5 @@
 import type { Mode, ModeParam } from './modes/types';
+import { type Clip, parseClips } from './timeline';
 export interface Effects {
   crt: boolean;
   grain: boolean;
@@ -66,6 +67,8 @@ export interface Settings extends Effects {
   autoImage: boolean;
   /** Mode ids the autopilot leaves out */
   autoSkip: string[];
+  /** Clips of the timeline editor */
+  timeline: Clip[];
 }
 
 const KEY = 'visualizer.settings.v1';
@@ -100,15 +103,16 @@ export const DEFAULTS: Settings = {
   filterBeat: true,
   filterPalette: false,
   invert: false,
-  auto: false,
+  auto: true,
   autoBeats: 1,
   autoMode: true,
   autoVariant: true,
   autoParams: true,
-  autoPalette: false,
-  autoFilter: false,
-  autoImage: false,
+  autoPalette: true,
+  autoFilter: true,
+  autoImage: true,
   autoSkip: [],
+  timeline: [],
 };
 
 /** Keys that would reach Object.prototype when used on a plain object */
@@ -116,12 +120,12 @@ const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /** Keep only stored values whose type matches the default, so a corrupt entry cannot break startup. */
 export function parseSettings(raw: unknown): Settings {
-  const s: Settings = { ...DEFAULTS, variants: {}, params: {}, autoSkip: [] };
+  const s: Settings = { ...DEFAULTS, variants: {}, params: {}, autoSkip: [], timeline: [] };
   if (!raw || typeof raw !== 'object') return s;
   const r = raw as Record<string, unknown>;
   const target = s as unknown as Record<string, unknown>;
   for (const key of Object.keys(DEFAULTS) as (keyof Settings)[]) {
-    if (key === 'variants' || key === 'params' || key === 'autoSkip') continue;
+    if (key === 'variants' || key === 'params' || key === 'autoSkip' || key === 'timeline') continue;
     const v = r[key];
     if (typeof v === typeof DEFAULTS[key] && (typeof v !== 'number' || Number.isFinite(v))) target[key] = v;
   }
@@ -140,6 +144,7 @@ export function parseSettings(raw: unknown): Settings {
       }
     }
   }
+  s.timeline = parseClips(r.timeline);
   if (Array.isArray(r.autoSkip)) s.autoSkip = r.autoSkip.filter((id): id is string => typeof id === 'string');
   return s;
 }

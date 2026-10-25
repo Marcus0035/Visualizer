@@ -239,6 +239,17 @@ export class AudioEngine {
     return this.media?.currentTime ?? 0;
   }
 
+  /** Length of the file source in seconds (0 for other sources) */
+  get duration(): number {
+    const d = this.media?.duration ?? 0;
+    return Number.isFinite(d) ? d : 0;
+  }
+
+  /** Jump to a position in the file source. */
+  seek(seconds: number): void {
+    if (this.media) this.media.currentTime = Math.max(0, Math.min(seconds, this.duration || seconds));
+  }
+
   get playing(): boolean {
     return this.media ? !this.media.paused : this.kind !== null;
   }

@@ -58,6 +58,7 @@ export interface PanelActions {
   setAutoSkip(modeId: string, skip: boolean): void;
   autoNow(): void;
   randomize(part?: RandomPart): void;
+  toggleTimeline(): void;
   back(): void;
   canGoBack(): boolean;
 }
@@ -104,6 +105,7 @@ const SHORTCUTS: [string, string][] = [
   ['S', 'strobe on beat'],
   ['X', 'glitch on beat'],
   ['N', 'next filter'],
+  ['T', 'timeline editor'],
   ['A', 'autopilot on / off'],
   ['R', 'autopilot: change now'],
   ['Wheel down / right arrow', 'random visual'],
@@ -281,6 +283,11 @@ export class Panel {
       'div',
       { class: 'toolbar' },
       miniMeter,
+      h(
+        'button',
+        { class: 'tool-btn', title: 'Timeline editor (T)', 'aria-label': 'Timeline editor', onclick: () => app.toggleTimeline() },
+        icon('Clapperboard', 18),
+      ),
       this.exportBtn,
       this.autoBtn,
       h(

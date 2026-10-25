@@ -16,6 +16,8 @@ import { FILTERS } from './render/filters';
 import { Renderer, type Scene } from './render/Renderer';
 import { DEFAULTS, type Effects, type Settings, loadSettings, paramValue, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
+import { Timeline } from './ui/Timeline';
+import { type Clip, unlockedParts, withTimeline } from './timeline';
 import { IMAGE_CHOICES, Panel, type PanelActions, type RandomPart } from './ui/Panel';
 
 const settings = loadSettings();
@@ -183,9 +185,9 @@ async function exportInBackground(format: ExportFormat): Promise<void> {
       scene(a, t, dt) {
         const calm = applyStructure(a, structure, s, t, dt);
         if (s.auto && calm < 0.5 && clock.tick(a.beat, a.level, dt, s.autoBeats)) {
-          autoStep(s, AUTO_CONTEXT);
+          autoStep(s, AUTO_CONTEXT, Math.random, unlockedParts(s, s.timeline, t));
         }
-        return sceneOf(s);
+        return sceneOf(withTimeline(s, s.timeline, t));
       },
       onProgress: (f) => offline === ctrl && panel.setExportProgress(f),
       signal: ctrl.signal,
@@ -260,10 +262,13 @@ const AUTO_CONTEXT: AutoContext = {
 
 const autoClock = new AutoClock();
 
+/** Position on the timeline: only a loaded track has one (-1 never matches a clip) */
+const timelineTime = (): number => (audio.kind === 'file' ? audio.currentTime : -1);
+
 /** Autopilot jump: new mode, variant, settings... as allowed in the Autopilot tab. */
 function autoJump(): void {
   autoClock.reset();
-  autoStep(settings, AUTO_CONTEXT);
+  autoStep(settings, AUTO_CONTEXT, Math.random, unlockedParts(settings, settings.timeline, timelineTime()));
   panel.refreshParams();
   changed();
 }
@@ -466,6 +471,7 @@ const actions: PanelActions = {
   },
   autoNow: () => autoJump(),
   randomize: (part) => randomize(part),
+  toggleTimeline: () => timeline.toggle(),
   back: () => back(),
   canGoBack: () => history.length > 0,
   setFont(id) {
@@ -475,6 +481,23 @@ const actions: PanelActions = {
   },
 };
 
+const timeline = new Timeline({
+  clips: () => settings.timeline,
+  setClips(clips: Clip[]) {
+    settings.timeline = clips;
+    saveSettings(settings);
+    timeline.refresh();
+  },
+  duration: () => (audio.kind === 'file' ? audio.duration : 0),
+  time: () => (audio.kind === 'file' ? audio.currentTime : 0),
+  playing: () => audio.playing,
+  togglePlay: () => audio.togglePlay(),
+  seek: (t) => audio.seek(t),
+  modes: MODES,
+  filters: FILTERS,
+  palettes: allPalettes,
+});
+document.body.append(timeline.el);
 const panel = new Panel(actions);
 panel.setCustomPalettes(customPalettes);
 document.body.append(panel.leftbar, panel.toolbar, panel.el, panel.exportDialog, panel.toast);
@@ -528,8 +551,11 @@ window.addEventListener('drop', (e) => {
   const file = e.dataTransfer?.files[0];
   if (!file) return;
   if (file.type.startsWith('image/')) void useImage(file);
-  // Before the start click the AudioContext cannot run yet
-  else if (!start.isConnected) void playFile(file);
+  // Before the start click the AudioContext cannot run yet: the track waits for the button
+  else if (start.isConnected) {
+    pendingTrack = file;
+    startNote.textContent = `Ready: ${file.name}. Press Start to play it.`;
+  } else void playFile(file);
 });
 
 window.addEventListener('keydown', (e) => {
@@ -568,6 +594,8 @@ window.addEventListener('keydown', (e) => {
       return actions.setEffect('glitch', !settings.glitch);
     case 'n':
       return actions.setFilter((settings.filter + 1) % FILTERS.length);
+    case 't':
+      return timeline.toggle();
     case 'a':
       actions.setAuto(!settings.auto);
       return panel.setStatus(settings.auto ? 'Autopilot on' : 'Autopilot off');
@@ -637,6 +665,10 @@ async function useDevAudio(): Promise<boolean> {
   }
 }
 
+/** Track dropped on the start screen, played when Start is pressed */
+let pendingTrack: File | null = null;
+const startNote = h('p', { class: 'start-note' });
+
 const start = h(
   'div',
   { class: 'start' },
@@ -647,14 +679,21 @@ const start = h(
       type: 'button',
       onclick: async () => {
         start.remove();
-        if (!(import.meta.env.DEV && (await useDevAudio()))) await audio.useDemo();
+        if (pendingTrack) await playFile(pendingTrack);
+        else if (!(import.meta.env.DEV && (await useDevAudio()))) await audio.useDemo();
         panel.sync();
       },
     },
     icon('Play', 22),
     h('span', {}, 'Start'),
   ),
-  h('p', {}, 'Starts with a demo loop. The sound source and everything else are in the settings, top right.'),
+  startNote,
+  h('p', {}, 'Tip: drag your own music and an image onto this window. Without music it starts with a demo loop.'),
+  h(
+    'p',
+    {},
+    'The autopilot is on: it changes modes, colors and effects by itself on the beat. You can turn it off (the shuffle button or key A, top right) and adjust everything by hand in the settings.',
+  ),
 );
 document.body.append(start);
 
@@ -670,7 +709,8 @@ function frame(now: number): void {
     if (track && audio.kind !== 'file') track = null;
     const calm = applyStructure(a, track?.structure, settings, audio.currentTime, dt);
     if (settings.auto && calm < 0.5 && autoClock.tick(a.beat, a.level, dt, settings.autoBeats)) autoJump();
-    renderer.render(sceneOf(settings), a, (now - t0) / 1000, dt);
+    renderer.render(sceneOf(withTimeline(settings, settings.timeline, timelineTime())), a, (now - t0) / 1000, dt);
+    timeline.tick();
     panel.meter(a.bands);
   } catch (err) {
     if (!reported) console.error(err);
