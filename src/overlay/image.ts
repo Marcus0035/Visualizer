@@ -7,13 +7,7 @@ const STORE_KEY = 'visualizer.image.v1';
 /** Set when the user removed the image, so the default one does not come back */
 const REMOVED_KEY = 'visualizer.image.removed';
 /** Shown until the user picks an image of their own */
-const STICKMAN = `${import.meta.env.BASE_URL}stickman.png`;
-/** The public site starts with a different one of these on every visit */
-const RANDOM_DEFAULTS = ['smiley', 'spiral', 'eye', 'star', 'rings', 'mushroom'].map((n) => `${import.meta.env.BASE_URL}defaults/${n}.png`);
-
-function defaultImage(): string {
-  return import.meta.env.PROD ? RANDOM_DEFAULTS[Math.floor(Math.random() * RANDOM_DEFAULTS.length)] : STICKMAN;
-}
+const DEFAULT_IMAGE = `${import.meta.env.BASE_URL}default.jpg`;
 
 export interface OverlayImage {
   canvas: HTMLCanvasElement;
@@ -85,7 +79,7 @@ export async function loadImageFile(file: File): Promise<{ image: OverlayImage; 
 
 export async function restoreImage(): Promise<OverlayImage | null> {
   try {
-    const url = localStorage.getItem(STORE_KEY) ?? (localStorage.getItem(REMOVED_KEY) ? null : defaultImage());
+    const url = localStorage.getItem(STORE_KEY) ?? (localStorage.getItem(REMOVED_KEY) ? null : DEFAULT_IMAGE);
     if (!url) return null;
     const res = await fetch(url);
     if (!res.ok) return null;

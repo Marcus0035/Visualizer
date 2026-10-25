@@ -697,6 +697,7 @@ const start = h(
     h('span', {}, 'Start'),
   ),
   startNote,
+  h('p', { class: 'start-demo' }, 'This is a demo. It does not work perfectly yet, but it will keep getting better.'),
   h('p', {}, 'Tip: drag your own music and an image onto this window. Without music it starts with a demo loop.'),
   h(
     'p',
