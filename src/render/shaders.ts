@@ -148,7 +148,8 @@ vec4 imageLayer(vec2 uv) {
     vec2 fx = smoothstep(0.0, w, t) * smoothstep(0.0, w, 1.0 - t);
     mask = inside(t) ? (uImageAlpha > 0.5 ? s.a : 1.0) * fx.x * fx.y : 0.0;
   } else {
-    mask = smoothstep(0.015, -0.015 - 0.9 * uImageFade, dist) * (uImageAlpha > 0.5 ? s.a : 1.0);
+    // Logos fit whole inside the shape, so outside their own box there is nothing
+    mask = smoothstep(0.015, -0.015 - 0.9 * uImageFade, dist) * (uImageAlpha > 0.5 ? s.a * float(inside(tex)) : 1.0);
   }
   float boost = 0.85 + 0.35 * uPulse;
 

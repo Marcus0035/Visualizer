@@ -151,6 +151,15 @@ export class Renderer {
     this.upload(this.text, canvas, true);
   }
 
+  /**
+   * Square box for crop shapes: photos are cut to their middle (shorter side), logos with
+   * transparency fit whole inside the shape (longer side), so a tall figure is not cut off.
+   */
+  private shapeSide(): number {
+    const { width, height, hasAlpha } = this.image;
+    return hasAlpha ? Math.max(width, height) : Math.min(width, height);
+  }
+
   /** Mip level matching how much the overlay is shrunk on screen. */
   private lod(texWidth: number, rect: number[]): number {
     const shownPx = rect[2] * 2 * this.width;
@@ -167,7 +176,7 @@ export class Renderer {
     const H = this.height;
     const size = fx.overlaySize;
     const img = this.image;
-    const side = Math.min(img.width, img.height);
+    const side = this.shapeSide();
     const iw = fx.imageShape > 0 ? side : img.width;
     const ih = fx.imageShape > 0 ? side : img.height;
     const fit = (w: number, h: number, cx: number, cy: number, bw: number, bh: number, boost = 1) => {
@@ -369,7 +378,7 @@ export class Renderer {
     gl.uniform1f(p.loc('uImageAlpha'), this.image.hasAlpha ? 1 : 0);
     gl.uniform1i(p.loc('uImageStyle'), fx.imageStyle);
     gl.uniform1i(p.loc('uImageShape'), fx.imageShape);
-    const side = Math.min(this.image.width, this.image.height);
+    const side = this.shapeSide();
     gl.uniform2f(p.loc('uImageCrop'), fx.imageShape > 0 ? side / this.image.width : 1, fx.imageShape > 0 ? side / this.image.height : 1);
     gl.uniform1f(p.loc('uImageAngle'), rects.angle);
     gl.uniform1f(p.loc('uImageOpacity'), fx.imageOpacity);

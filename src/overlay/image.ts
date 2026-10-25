@@ -4,6 +4,10 @@ const MAX_SIDE = 1280;
 /** Stored copy is smaller so it fits the localStorage quota */
 const STORE_SIDE = 800;
 const STORE_KEY = 'visualizer.image.v1';
+/** Set when the user removed the image, so the default one does not come back */
+const REMOVED_KEY = 'visualizer.image.removed';
+/** Shown until the user picks an image of their own */
+const DEFAULT_IMAGE = `${import.meta.env.BASE_URL}stickman.png`;
 
 export interface OverlayImage {
   canvas: HTMLCanvasElement;
@@ -64,6 +68,7 @@ export async function loadImageFile(file: File): Promise<{ image: OverlayImage; 
   try {
     const url = image.hasAlpha ? small.toDataURL('image/png') : small.toDataURL('image/jpeg', 0.85);
     localStorage.setItem(STORE_KEY, url);
+    localStorage.removeItem(REMOVED_KEY);
     return { image, saved: true };
   } catch {
     // Too big for storage or storage blocked: drop the old one so it does not come back
@@ -74,17 +79,21 @@ export async function loadImageFile(file: File): Promise<{ image: OverlayImage; 
 
 export async function restoreImage(): Promise<OverlayImage | null> {
   try {
-    const url = localStorage.getItem(STORE_KEY);
+    const url = localStorage.getItem(STORE_KEY) ?? (localStorage.getItem(REMOVED_KEY) ? null : DEFAULT_IMAGE);
     if (!url) return null;
-    return await fromBlob(await (await fetch(url)).blob());
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await fromBlob(await res.blob());
   } catch {
     return null;
   }
 }
 
-export function forgetImage(): void {
+/** `removed`: the user took the image away, so the default one stays away too. */
+export function forgetImage(removed = false): void {
   try {
     localStorage.removeItem(STORE_KEY);
+    if (removed) localStorage.setItem(REMOVED_KEY, '1');
   } catch {
     // Not critical
   }

@@ -348,7 +348,7 @@ const actions: PanelActions = {
     imageJob++;
     renderer.setImage(null);
     currentImage = null;
-    forgetImage();
+    forgetImage(true);
     hasImage = false;
     imagePalette = null;
     panel.setImagePalette(null);
