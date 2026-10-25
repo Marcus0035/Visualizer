@@ -1,3 +1,4 @@
+import type { AnalyserLike } from './bufferAnalyser';
 import { BeatDetector, TempoTracker, spectralFlux, KICK_RANGE, bandEnergy, type Bands, computeBands, envelope, normalizeDb, rms } from './analysis';
 import { renderDemoLoop } from './demo';
 
@@ -31,6 +32,66 @@ const FFT_SIZE = 2048;
 const MIN_DB = -90;
 const MAX_DB = -10;
 
+/** Analyser setup shared by the live engine and the offline export */
+export function setupAnalysers(...analysers: AnalyserNode[]): void {
+  for (const a of analysers) {
+    a.fftSize = FFT_SIZE;
+    a.smoothingTimeConstant = 0.3;
+    a.minDecibels = MIN_DB;
+    a.maxDecibels = MAX_DB;
+  }
+}
+
+/** Turns analyser readings into AudioFrames: bands, level, beats (tempo grid with kick fallback). */
+export class FrameAnalyzer {
+  readonly frame: AudioFrame;
+  private readonly beats = new BeatDetector();
+  private readonly tempo = new TempoTracker();
+  private readonly prevSpec = new Float32Array(FFT_SIZE / 2);
+  private readonly dbBuf = new Float32Array(FFT_SIZE / 2);
+
+  constructor(sampleRate: number) {
+    this.frame = {
+      wave: new Float32Array(FFT_SIZE),
+      waveL: new Float32Array(FFT_SIZE),
+      waveR: new Float32Array(FFT_SIZE),
+      spectrum: new Float32Array(FFT_SIZE / 2),
+      sampleRate,
+      bands: { bass: 0, mid: 0, treble: 0 },
+      level: 0,
+      beat: false,
+      pulse: 0,
+    };
+  }
+
+  reset(): void {
+    this.beats.reset();
+    this.tempo.reset();
+    this.prevSpec.fill(0);
+  }
+
+  update(mono: AnalyserLike, left: AnalyserLike, right: AnalyserLike, dt: number, nowMs: number): AudioFrame {
+    const f = this.frame;
+    mono.getFloatTimeDomainData(f.wave);
+    left.getFloatTimeDomainData(f.waveL);
+    right.getFloatTimeDomainData(f.waveR);
+    mono.getFloatFrequencyData(this.dbBuf);
+    for (let i = 0; i < this.dbBuf.length; i++) f.spectrum[i] = normalizeDb(this.dbBuf[i], MIN_DB, MAX_DB);
+
+    const raw = computeBands(f.spectrum, f.sampleRate);
+    f.bands.bass = envelope(f.bands.bass, raw.bass, dt);
+    f.bands.mid = envelope(f.bands.mid, raw.mid, dt);
+    f.bands.treble = envelope(f.bands.treble, raw.treble, dt);
+    f.level = envelope(f.level, Math.min(1, rms(f.wave) * 2.5), dt);
+
+    const onset = this.beats.update(bandEnergy(f.spectrum, f.sampleRate, ...KICK_RANGE), nowMs);
+    const gridBeat = this.tempo.update(spectralFlux(f.spectrum, this.prevSpec, f.sampleRate), nowMs / 1000);
+    f.beat = this.tempo.confident ? gridBeat : onset;
+    f.pulse = f.beat ? 1 : f.pulse * Math.exp(-dt * 6);
+    return f;
+  }
+}
+
 export class AudioEngine {
   readonly ctx = new AudioContext();
   readonly frame: AudioFrame;
@@ -44,10 +105,7 @@ export class AudioEngine {
   private readonly mono = this.ctx.createAnalyser();
   private readonly left = this.ctx.createAnalyser();
   private readonly right = this.ctx.createAnalyser();
-  private readonly beats = new BeatDetector();
-  private readonly tempo = new TempoTracker();
-  private readonly prevSpec = new Float32Array(FFT_SIZE / 2);
-  private readonly dbBuf = new Float32Array(FFT_SIZE / 2);
+  private readonly analyzer = new FrameAnalyzer(this.ctx.sampleRate);
 
   private source: AudioNode | null = null;
   private stream: MediaStream | null = null;
@@ -61,12 +119,7 @@ export class AudioEngine {
   label = '';
 
   constructor() {
-    for (const a of [this.mono, this.left, this.right]) {
-      a.fftSize = FFT_SIZE;
-      a.smoothingTimeConstant = 0.3;
-      a.minDecibels = MIN_DB;
-      a.maxDecibels = MAX_DB;
-    }
+    setupAnalysers(this.mono, this.left, this.right);
     const splitter = this.ctx.createChannelSplitter(2);
     this.input.connect(this.mono);
     this.input.connect(splitter);
@@ -74,17 +127,7 @@ export class AudioEngine {
     splitter.connect(this.right, 1);
     this.monitor.connect(this.ctx.destination);
 
-    this.frame = {
-      wave: new Float32Array(FFT_SIZE),
-      waveL: new Float32Array(FFT_SIZE),
-      waveR: new Float32Array(FFT_SIZE),
-      spectrum: new Float32Array(FFT_SIZE / 2),
-      sampleRate: this.ctx.sampleRate,
-      bands: { bass: 0, mid: 0, treble: 0 },
-      level: 0,
-      beat: false,
-      pulse: 0,
-    };
+    this.frame = this.analyzer.frame;
   }
 
   set sensitivity(value: number) {
@@ -191,6 +234,11 @@ export class AudioEngine {
     }
   }
 
+  /** Position in the file source, seconds (0 for other sources) */
+  get currentTime(): number {
+    return this.media?.currentTime ?? 0;
+  }
+
   get playing(): boolean {
     return this.media ? !this.media.paused : this.kind !== null;
   }
@@ -237,24 +285,7 @@ export class AudioEngine {
 
   /** Read the analysers and update `frame`. Call once per animation frame. */
   update(dt: number, nowMs: number): AudioFrame {
-    const f = this.frame;
-    this.mono.getFloatTimeDomainData(f.wave);
-    this.left.getFloatTimeDomainData(f.waveL);
-    this.right.getFloatTimeDomainData(f.waveR);
-    this.mono.getFloatFrequencyData(this.dbBuf);
-    for (let i = 0; i < this.dbBuf.length; i++) f.spectrum[i] = normalizeDb(this.dbBuf[i], MIN_DB, MAX_DB);
-
-    const raw = computeBands(f.spectrum, f.sampleRate);
-    f.bands.bass = envelope(f.bands.bass, raw.bass, dt);
-    f.bands.mid = envelope(f.bands.mid, raw.mid, dt);
-    f.bands.treble = envelope(f.bands.treble, raw.treble, dt);
-    f.level = envelope(f.level, Math.min(1, rms(f.wave) * 2.5), dt);
-
-    const onset = this.beats.update(bandEnergy(f.spectrum, f.sampleRate, ...KICK_RANGE), nowMs);
-    const gridBeat = this.tempo.update(spectralFlux(f.spectrum, this.prevSpec, f.sampleRate), nowMs / 1000);
-    f.beat = this.tempo.confident ? gridBeat : onset;
-    f.pulse = f.beat ? 1 : f.pulse * Math.exp(-dt * 6);
-    return f;
+    return this.analyzer.update(this.mono, this.left, this.right, dt, nowMs);
   }
 
   private attach(node: AudioNode, kind: SourceKind, label: string, audible: boolean, extra: Attachment = {}): void {
@@ -267,9 +298,7 @@ export class AudioEngine {
     this.label = label;
     this.stream = extra.stream ?? null;
     this.media = extra.media ?? null;
-    this.beats.reset();
-    this.tempo.reset();
-    this.prevSpec.fill(0);
+    this.analyzer.reset();
 
     // Stopped sharing or unplugged device: drop the dead source
     const stream = this.stream;

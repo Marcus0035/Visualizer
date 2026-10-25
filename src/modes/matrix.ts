@@ -4,23 +4,34 @@ import type { Mode2D, View } from './types';
 const KATAKANA = Array.from({ length: 96 }, (_, i) => String.fromCharCode(0x30a0 + i)).join('');
 const GLYPHS = [KATAKANA + '0123456789', '01'];
 
-let size = 16;
-let rows = 0;
-let heads = new Float32Array(0); // current row (fractional) per column
-let speeds = new Float32Array(0); // rows per second at level 0
-let lastRow = new Int32Array(0);
+interface Rain {
+  size: number;
+  rows: number;
+  heads: Float32Array; // current row (fractional) per column
+  speeds: Float32Array; // rows per second at level 0
+  lastRow: Int32Array;
+}
+
+/** Per drawing context, so the live view and a background export do not share the rain */
+const rains = new WeakMap<CanvasRenderingContext2D, Rain>();
 
 function pick(set: string): string {
   return set[(Math.random() * set.length) | 0];
 }
 
-function setup(v: View): void {
-  size = Math.max(12 * v.dpr, Math.round(v.width / 90));
+function setup(g: CanvasRenderingContext2D, v: View): Rain {
+  const size = Math.max(12 * v.dpr, Math.round(v.width / 90));
   const cols = Math.ceil(v.width / size);
-  rows = Math.ceil(v.height / size);
-  heads = new Float32Array(cols).map(() => -Math.random() * rows);
-  speeds = new Float32Array(cols).map(() => 6 + Math.random() * 14);
-  lastRow = new Int32Array(cols).fill(-1);
+  const rows = Math.ceil(v.height / size);
+  const rain: Rain = {
+    size,
+    rows,
+    heads: new Float32Array(cols).map(() => -Math.random() * rows),
+    speeds: new Float32Array(cols).map(() => 6 + Math.random() * 14),
+    lastRow: new Int32Array(cols).fill(-1),
+  };
+  rains.set(g, rain);
+  return rain;
 }
 
 export const matrix: Mode2D = {
@@ -31,14 +42,16 @@ export const matrix: Mode2D = {
   variants: ['Znaky', 'Binární'],
 
   reset(g, v) {
-    setup(v);
+    setup(g, v);
     g.fillStyle = v.palette.bg;
     g.fillRect(0, 0, v.width, v.height);
   },
 
   render(g, a, v) {
     const { palette: p } = v;
-    if (heads.length !== Math.ceil(v.width / size)) setup(v);
+    let rain = rains.get(g);
+    if (!rain || rain.heads.length !== Math.ceil(v.width / rain.size)) rain = setup(g, v);
+    const { size, rows, heads, speeds, lastRow } = rain;
     const set = GLYPHS[v.variant] ?? GLYPHS[0];
 
     g.fillStyle = rgba(p.bg, 0.06 + v.dt * 2);

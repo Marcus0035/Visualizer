@@ -233,6 +233,11 @@ export class Renderer {
     return t;
   }
 
+  /** Free the GPU context right away (export renderers), instead of waiting for garbage collection. */
+  dispose(): void {
+    this.gl.getExtension('WEBGL_lose_context')?.loseContext();
+  }
+
   /** Render at a fixed size (video export) instead of the window size; null goes back. */
   setFixedSize(size: { width: number; height: number } | null): void {
     this.fixed = size;

@@ -20,6 +20,7 @@
     "@fontsource/space-mono": "^5.3.0",
     "@fontsource/unbounded": "^5.3.0",
     "@fontsource/unifrakturmaguntia": "^5.3.0",
-    "lucide": "^1.61.0"
+    "lucide": "^1.61.0",
+    "mediabunny": "1.62.1"
   }
 }

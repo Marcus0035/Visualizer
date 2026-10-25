@@ -7,10 +7,13 @@ import type { Mode, Palette } from './modes/types';
 import { type OverlayImage, forgetImage, loadImageFile, restoreImage } from './overlay/image';
 import { IMAGE_PALETTE_ID, paletteFromCanvas } from './overlay/imagePalette';
 import { FONTS, renderText } from './overlay/text';
+import { SongStructure } from './audio/structure';
+import type { AudioFrame } from './audio/AudioEngine';
+import { offlineSupported, renderOffline } from './export/offline';
 import { EXPORT_SIZES, type ExportFormat, VideoRecorder, download, exportFileName, pickType } from './export/recorder';
 import { FILTERS } from './render/filters';
-import { Renderer } from './render/Renderer';
-import { DEFAULTS, type Effects, loadSettings, paramValue, saveSettings, variantOf } from './settings';
+import { Renderer, type Scene } from './render/Renderer';
+import { DEFAULTS, type Effects, type Settings, loadSettings, paramValue, saveSettings, variantOf } from './settings';
 import { h, icon } from './ui/dom';
 import { IMAGE_CHOICES, Panel, type PanelActions } from './ui/Panel';
 
@@ -64,9 +67,58 @@ let hasImage = false;
 let imagePalette: Palette | null = null;
 
 const allPalettes = (): Palette[] => (imagePalette ? [imagePalette, ...PALETTES] : PALETTES);
-const currentPalette = (): Palette => allPalettes().find((p) => p.id === settings.palette) ?? PALETTES[0];
+const paletteOf = (s: Settings): Palette => allPalettes().find((p) => p.id === s.palette) ?? PALETTES[0];
+const currentPalette = (): Palette => paletteOf(settings);
+
+/** What to draw for the given settings (the live ones, or a background export's own copy) */
+function sceneOf(s: Settings): Scene {
+  const mode = MODES.find((m) => m.id === s.mode) ?? MODES[0];
+  const params = Object.fromEntries((mode.params ?? []).map((p) => [p.id, paramValue(mode, p, s)]));
+  return { mode, variant: variantOf(mode, s), palette: paletteOf(s), settings: s, params };
+}
+
+/** Decoded loaded track and its parts (intro, breaks...); null for other sources */
+let track: { buffer: AudioBuffer; structure: SongStructure } | null = null;
+let trackJob = 0;
+
+/** Play a file and analyse its structure in the background. */
+async function useTrack(file: File): Promise<void> {
+  const job = ++trackJob;
+  track = null;
+  await audio.useFile(file);
+  try {
+    const buffer = await audio.ctx.decodeAudioData(await file.arrayBuffer());
+    if (job !== trackJob) return;
+    track = { buffer, structure: SongStructure.analyze(buffer) };
+    const calm = track.structure.sections.filter((s) => s.kind !== 'drive').length;
+    if (calm) panel.setStatus(`Skladba rozpoznaná: ${calm} ${calm === 1 ? 'klidná část' : calm < 5 ? 'klidné části' : 'klidných částí'} (intro, breaky, outro).`);
+  } catch {
+    // Plays, but cannot be decoded here: no structure and no background export
+  }
+}
+
+/**
+ * Calm parts of the loaded track: no beats and a fading pulse, so flashes, strobe, glitch
+ * and the autopilot rest; a drop fires one strong beat. Returns how calm it is, 0..1.
+ */
+function applyStructure(a: AudioFrame, structure: SongStructure | undefined, s: Settings, t: number, dt: number): number {
+  if (!structure || !s.sections) return 0;
+  const calm = structure.calmAt(t);
+  if (calm > 0) {
+    if (calm >= 0.5) a.beat = false;
+    a.pulse *= 1 - calm;
+  }
+  if (structure.dropAt(t, dt)) {
+    a.beat = true;
+    a.pulse = 1;
+  }
+  return calm;
+}
+
+let currentImage: OverlayImage | null = null;
 
 function showImage(img: OverlayImage): void {
+  currentImage = img;
   renderer.setImage(img);
   hasImage = true;
   imagePalette = paletteFromCanvas(img.canvas);
@@ -103,8 +155,56 @@ let recorder: VideoRecorder | null = null;
 let recordTimer = 0;
 
 /** Record the stage in the chosen format with the source audio; a file source plays once from the start. */
-function startExport(format: ExportFormat): void {
-  if (recorder) return;
+let offline: AbortController | null = null;
+
+/** Make the video from the whole loaded track off-screen, with a copy of the current look. */
+async function exportInBackground(format: ExportFormat): Promise<void> {
+  if (!track || offline) return;
+  const { buffer, structure } = track;
+  const s: Settings = structuredClone(settings);
+  const clock = new AutoClock();
+  const ctrl = new AbortController();
+  offline = ctrl;
+  panel.setExportProgress(0);
+  const text = await renderText(settings.text, settings.font);
+  try {
+    const blob = await renderOffline({
+      buffer,
+      format,
+      sensitivity: settings.sensitivity,
+      setup(r) {
+        MODES.forEach((m) => r.prepare(m));
+        r.setImage(currentImage);
+        r.setText(text);
+      },
+      scene(a, t, dt) {
+        const calm = applyStructure(a, structure, s, t, dt);
+        if (s.auto && calm < 0.5 && clock.tick(a.beat, a.level, dt, s.autoBeats)) {
+          autoStep(s, { modes: MODES, palettes: PALETTES, filterCount: FILTERS.length });
+        }
+        return sceneOf(s);
+      },
+      onProgress: (f) => offline === ctrl && panel.setExportProgress(f),
+      signal: ctrl.signal,
+    });
+    if (blob) {
+      download(blob, exportFileName('video/mp4', format, new Date()));
+      panel.setStatus('Video je hotové a stažené.');
+    } else panel.setStatus('Výroba videa zrušena.');
+  } catch (err) {
+    panel.setStatus(`Video nejde vyrobit: ${(err as Error).message}`, true);
+  } finally {
+    if (offline === ctrl) offline = null;
+    panel.setExportProgress(null);
+  }
+}
+
+function startExport(format: ExportFormat, background = false): void {
+  if (background) {
+    void exportInBackground(format);
+    return;
+  }
+  if (recorder || offline) return;
   const type = typeof MediaRecorder === 'undefined' ? null : pickType((t) => MediaRecorder.isTypeSupported(t));
   if (!type) {
     panel.setStatus('Tenhle prohlížeč neumí nahrávat video.', true);
@@ -128,6 +228,12 @@ function startExport(format: ExportFormat): void {
 }
 
 async function stopExport(): Promise<void> {
+  if (offline) {
+    offline.abort();
+    offline = null;
+    panel.setExportProgress(null);
+    return;
+  }
   const r = recorder;
   if (!r) return;
   recorder = null;
@@ -240,6 +346,7 @@ const actions: PanelActions = {
   removeImage() {
     imageJob++;
     renderer.setImage(null);
+    currentImage = null;
     forgetImage();
     hasImage = false;
     imagePalette = null;
@@ -249,6 +356,7 @@ const actions: PanelActions = {
   },
   startExport,
   stopExport: () => void stopExport(),
+  canExportInBackground: () => !!track && audio.kind === 'file' && offlineSupported(),
   setImageChoice(key, i) {
     settings[key] = i;
     changed();
@@ -328,8 +436,7 @@ document.addEventListener('click', (e) => {
 
 async function playFile(file: File): Promise<void> {
   try {
-    await audio.useFile(file);
-    panel.setStatus('');
+    await useTrack(file);
   } catch (err) {
     panel.setStatus(`Soubor nejde přehrát: ${(err as Error).message}`, true);
   }
@@ -463,7 +570,7 @@ async function useDevAudio(): Promise<boolean> {
     if (!res.ok) return false;
     const blob = await res.blob();
     const name = decodeURIComponent(res.headers.get('X-Audio-Name') ?? 'skladba');
-    await audio.useFile(new File([blob], name, { type: blob.type }));
+    await useTrack(new File([blob], name, { type: blob.type }));
     return true;
   } catch {
     return false;
@@ -500,11 +607,10 @@ function frame(now: number): void {
   last = now;
   try {
     const a = audio.update(dt, now);
-    if (settings.auto && autoClock.tick(a.beat, a.level, dt, settings.autoBeats)) autoJump();
-    const mode = currentMode();
-    const params = Object.fromEntries((mode.params ?? []).map((p) => [p.id, paramValue(mode, p, settings)]));
-    const scene = { mode, variant: variantOf(mode, settings), palette: currentPalette(), settings, params };
-    renderer.render(scene, a, (now - t0) / 1000, dt);
+    if (track && audio.kind !== 'file') track = null;
+    const calm = applyStructure(a, track?.structure, settings, audio.currentTime, dt);
+    if (settings.auto && calm < 0.5 && autoClock.tick(a.beat, a.level, dt, settings.autoBeats)) autoJump();
+    renderer.render(sceneOf(settings), a, (now - t0) / 1000, dt);
     panel.meter(a.bands);
   } catch (err) {
     if (!reported) console.error(err);

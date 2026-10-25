@@ -34,8 +34,11 @@ export interface PanelActions {
   pickImage(): void;
   removeImage(): void;
   /** Start a video export, or stop the running one */
-  startExport(format: ExportFormat): void;
+  startExport(format: ExportFormat, background: boolean): void;
+  /** Stops a recording (and downloads it) or cancels a background export */
   stopExport(): void;
+  /** A loaded track that can be turned into a video in the background */
+  canExportInBackground(): boolean;
   setImageChoice(key: ImageChoice, index: number): void;
   setImageAmount(key: 'imageOpacity' | 'imageGlow', value: number): void;
   setOverlaySize(value: number): void;
@@ -176,7 +179,10 @@ export class Panel {
   /** Choose PC or phone video */
   readonly exportDialog: HTMLDialogElement;
   private readonly exportNote = h('p', { class: 'hint' });
-  private recording = false;
+  /** Recording or rendering in the background */
+  private exportBusy = false;
+  private background = true;
+  private readonly backgroundRow: HTMLElement;
   /** Elements made inert while the dialog is open (focus stays inside) */
   private inerted: HTMLElement[] = [];
 
@@ -206,7 +212,7 @@ export class Panel {
         class: 'tool-btn export-btn',
         title: 'Stáhnout video',
         'aria-label': 'Stáhnout video',
-        onclick: () => (this.recording ? app.stopExport() : this.openExport()),
+        onclick: () => (this.exportBusy ? app.stopExport() : this.openExport()),
       },
       icon('Download', 18),
       this.exportLabel,
@@ -219,7 +225,7 @@ export class Panel {
           class: `export-option ${format}`,
           onclick: () => {
             this.exportDialog.close();
-            app.startExport(format);
+            app.startExport(format, this.background && app.canExportInBackground());
           },
         },
         h('i', { class: 'export-frame' }, icon(iconName, 26)),
@@ -245,6 +251,14 @@ export class Panel {
         option('pc', 'Monitor', 'Pro PC', 'Na šířku 16:9, 1920 × 1080'),
         option('phone', 'Smartphone', 'Pro telefon', 'Na výšku 9:16, 1080 × 1920'),
       ),
+      (this.backgroundRow = h(
+        'div',
+        { class: 'export-background' },
+        toggle('Na pozadí', true, (on) => {
+          this.background = on;
+          this.updateExportNote();
+        }).row,
+      )),
       this.exportNote,
     );
     // Click outside the window closes it
@@ -320,6 +334,7 @@ export class Panel {
     for (const p of PALETTES) palettes.append(this.paletteButton(p));
     const fx = h('div', { class: 'switches' });
     const fxDefs: [keyof Effects, string, string?][] = [
+      ['sections', 'Klid v intru a breaku', 'U nahrané skladby se efekty v klidných částech zastaví'],
       ['strictPalette', 'Jen barvy palety', 'Filtry, obrázek ani režim nepřidají jiné barvy'],
       ['crt', 'CRT obrazovka', 'Zakřivení, řádky a barevný posun'],
       ['grain', 'Zrno', 'Šum jako na filmu'],
@@ -532,24 +547,44 @@ export class Panel {
     this.showTab(saved ? saved.id : 'mode');
   }
 
-  private openExport(): void {
+  private updateExportNote(): void {
+    const canBackground = this.app.canExportInBackground();
+    this.backgroundRow.hidden = !canBackground;
     this.exportNote.textContent =
-      this.app.source().kind === 'file'
-        ? 'Nahraje se celá skladba od začátku i se zvukem. Ukončit jde dřív stejným tlačítkem.'
-        : 'Nahrává se obraz i zvuk, dokud nahrávání nezastavíš stejným tlačítkem.';
+      canBackground && this.background
+        ? 'Video se vyrobí z celé skladby rychleji než v reálném čase. Appku mezitím můžeš normálně používat.'
+        : this.app.source().kind === 'file'
+          ? 'Nahraje se celá skladba od začátku i se zvukem. Ukončit jde dřív stejným tlačítkem.'
+          : 'Nahrává se obraz i zvuk, dokud nahrávání nezastavíš stejným tlačítkem.';
+  }
+
+  private openExport(): void {
+    this.updateExportNote();
     this.exportDialog.showModal();
+  }
+
+  private exportState(busy: boolean, iconName: string, text: string, label: string): void {
+    this.exportBusy = busy;
+    this.exportBtn.classList.toggle('recording', busy);
+    this.exportBtn.classList.remove('rendering');
+    this.exportBtn.replaceChildren(icon(iconName, busy ? 14 : 18), this.exportLabel);
+    this.exportLabel.textContent = text;
+    this.exportBtn.title = label;
+    this.exportBtn.setAttribute('aria-label', label);
   }
 
   /** Recording time in seconds, or null when not recording. */
   setRecording(seconds: number | null): void {
-    this.recording = seconds !== null;
-    this.exportBtn.classList.toggle('recording', this.recording);
-    this.exportBtn.replaceChildren(icon(this.recording ? 'Square' : 'Download', this.recording ? 14 : 18), this.exportLabel);
-    const s = Math.floor(seconds ?? 0);
-    this.exportLabel.textContent = this.recording ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '';
-    const label = this.recording ? 'Zastavit nahrávání a stáhnout' : 'Stáhnout video';
-    this.exportBtn.title = label;
-    this.exportBtn.setAttribute('aria-label', label);
+    if (seconds === null) return this.exportState(false, 'Download', '', 'Stáhnout video');
+    const s = Math.floor(seconds);
+    this.exportState(true, 'Square', `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, 'Zastavit nahrávání a stáhnout');
+  }
+
+  /** Background export progress 0..1, or null when done. */
+  setExportProgress(fraction: number | null): void {
+    if (fraction === null) return this.exportState(false, 'Download', '', 'Stáhnout video');
+    this.exportState(true, 'X', `${Math.floor(fraction * 100)} %`, 'Zrušit výrobu videa');
+    this.exportBtn.classList.add('rendering');
   }
 
   get isOpen(): boolean {

@@ -971,3 +971,17 @@ input[type='range'] {
     grid-template-columns: 1fr;
   }
 }
+
+.tool-btn.export-btn.recording.rendering {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.tool-btn.export-btn.rendering svg {
+  fill: none;
+  animation: none;
+}
+
+.export-background {
+  padding: 14px 20px 0;
+}

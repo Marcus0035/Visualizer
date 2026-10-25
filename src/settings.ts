@@ -4,6 +4,8 @@ export interface Effects {
   grain: boolean;
   strobe: boolean;
   glitch: boolean;
+  /** Loaded track: beat effects rest in the intro, breaks and outro */
+  sections: boolean;
   /** Final picture uses only the palette colors (filters and images cannot tint it) */
   strictPalette: boolean;
 }
@@ -74,6 +76,7 @@ export const DEFAULTS: Settings = {
   strobe: false,
   glitch: false,
   strictPalette: false,
+  sections: true,
   imageStyle: 0,
   imageShape: 0,
   imageMotion: 1,
