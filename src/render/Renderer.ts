@@ -346,7 +346,9 @@ export class Renderer {
     gl.uniform1f(p.loc('uSrcGlow'), mode.kind === '2d' ? (mode.glow ?? 0) : 0);
     gl.uniform3fv(p.loc('uBg'), hexToRgb(palette.bg));
     gl.uniform3fv(p.loc('uA'), hexToRgb(palette.a));
+    gl.uniform3fv(p.loc('uB'), hexToRgb(palette.b));
     gl.uniform3fv(p.loc('uC'), hexToRgb(palette.c));
+    gl.uniform1f(p.loc('uStrict'), fx.strictPalette ? 1 : 0);
     gl.uniform1f(p.loc('uCrt'), fx.crt ? 1 : 0);
     gl.uniform1f(p.loc('uGrain'), fx.grain ? 1 : 0);
     // Short flash / glitch only on the peak of the beat pulse

@@ -320,6 +320,7 @@ export class Panel {
     for (const p of PALETTES) palettes.append(this.paletteButton(p));
     const fx = h('div', { class: 'switches' });
     const fxDefs: [keyof Effects, string, string?][] = [
+      ['strictPalette', 'Jen barvy palety', 'Filtry, obrázek ani režim nepřidají jiné barvy'],
       ['crt', 'CRT obrazovka', 'Zakřivení, řádky a barevný posun'],
       ['grain', 'Zrno', 'Šum jako na filmu'],
       ['strobe', 'Strobe na beat', 'Blikání, pozor při citlivosti na světlo'],

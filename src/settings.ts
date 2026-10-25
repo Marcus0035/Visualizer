@@ -4,6 +4,8 @@ export interface Effects {
   grain: boolean;
   strobe: boolean;
   glitch: boolean;
+  /** Final picture uses only the palette colors (filters and images cannot tint it) */
+  strictPalette: boolean;
 }
 
 export interface Settings extends Effects {
@@ -71,6 +73,7 @@ export const DEFAULTS: Settings = {
   grain: false,
   strobe: false,
   glitch: false,
+  strictPalette: false,
   imageStyle: 0,
   imageShape: 0,
   imageMotion: 1,

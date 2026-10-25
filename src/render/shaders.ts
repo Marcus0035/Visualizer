@@ -52,7 +52,9 @@ uniform float uPulse;
 uniform float uBass;
 uniform vec3 uBg;
 uniform vec3 uA;
+uniform vec3 uB;
 uniform vec3 uC;
+uniform float uStrict;  // map the final picture onto the palette colors only
 uniform sampler2D uImage;
 uniform float uHasImage;
 uniform float uImageAlpha;
@@ -178,6 +180,20 @@ vec4 imageLayer(vec2 uv) {
     a = mask;
   }
   return vec4(col * uImageOpacity + glow, a * uImageOpacity);
+}
+
+// Brightness ramp through the palette: background, secondary, primary, highlight, each
+// at its own brightness, so palette colors map onto themselves and anything else
+// (filter tints, photo colors) turns into the nearest palette shade
+vec3 paletteOnly(vec3 col) {
+  float l = luma(max(col, 0.0));
+  float p0 = luma(uBg);
+  float p1 = max(luma(uB), p0 + 0.02);
+  float p2 = max(luma(uA), p1 + 0.02);
+  float p3 = max(luma(uC), p2 + 0.02);
+  if (l < p1) return mix(uBg, uB, smoothstep(p0, p1, l));
+  if (l < p2) return mix(uB, uA, (l - p1) / (p2 - p1));
+  return mix(uA, uC, clamp((l - p2) / (p3 - p2), 0.0, 1.0));
 }
 
 float textAlpha(vec2 uv) {
@@ -385,6 +401,7 @@ void main() {
   }
 
   col = mix(col, vec3(1.0), uStrobe * 0.75);
+  if (uStrict > 0.5) col = paletteOnly(col);
   outColor = vec4(col, 1.0);
 }
 `;
