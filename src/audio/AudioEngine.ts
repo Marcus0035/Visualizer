@@ -39,6 +39,8 @@ export class AudioEngine {
 
   private readonly input = this.ctx.createGain(); // sensitivity, feeds analysis only
   private readonly monitor = this.ctx.createGain(); // what reaches the speakers
+  private readonly tap = this.ctx.createGain(); // full-volume mix for video export
+  private recordDest: MediaStreamAudioDestinationNode | null = null;
   private readonly mono = this.ctx.createAnalyser();
   private readonly left = this.ctx.createAnalyser();
   private readonly right = this.ctx.createAnalyser();
@@ -198,6 +200,33 @@ export class AudioEngine {
     else this.media.pause();
   }
 
+  /** Audio of the current source at full volume (independent of the speaker volume), for video export. */
+  recordStream(): MediaStream {
+    if (!this.recordDest) {
+      this.recordDest = this.ctx.createMediaStreamDestination();
+      this.tap.connect(this.recordDest);
+    }
+    return this.recordDest.stream;
+  }
+
+  /** File source: play once from the start, without looping. Returns the element, or null for other sources. */
+  playFromStart(): HTMLAudioElement | null {
+    const m = this.media;
+    if (!m) return null;
+    m.loop = false;
+    m.currentTime = 0;
+    m.play().catch(() => this.onchange());
+    return m;
+  }
+
+  /** Back to looping after playFromStart; a track that already ended starts again. */
+  restoreLoop(): void {
+    const m = this.media;
+    if (!m) return;
+    m.loop = true;
+    if (m.ended) m.play().catch(() => this.onchange());
+  }
+
   /** Labelled audio inputs; labels are empty until the user grants mic permission once. */
   async listInputs(): Promise<MediaDeviceInfo[]> {
     const all = await navigator.mediaDevices.enumerateDevices();
@@ -227,6 +256,7 @@ export class AudioEngine {
   private attach(node: AudioNode, kind: SourceKind, label: string, audible: boolean, extra: Attachment = {}): void {
     this.detach();
     node.connect(this.input);
+    node.connect(this.tap);
     if (audible) node.connect(this.monitor);
     this.source = node;
     this.kind = kind;

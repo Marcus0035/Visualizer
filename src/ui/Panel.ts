@@ -5,6 +5,7 @@ import type { Mode, Palette } from '../modes/types';
 import { AUTO_EVERY } from '../autopilot';
 import { IMAGE_PALETTE_ID } from '../overlay/imagePalette';
 import { FONTS } from '../overlay/text';
+import type { ExportFormat } from '../export/recorder';
 import { FILTERS } from '../render/filters';
 import { type Effects, type Settings, paramValue, variantOf } from '../settings';
 import { h, icon, toggle } from './dom';
@@ -32,6 +33,9 @@ export interface PanelActions {
   hasImage(): boolean;
   pickImage(): void;
   removeImage(): void;
+  /** Start a video export, or stop the running one */
+  startExport(format: ExportFormat): void;
+  stopExport(): void;
   setImageChoice(key: ImageChoice, index: number): void;
   setImageAmount(key: 'imageOpacity' | 'imageGlow', value: number): void;
   setOverlaySize(value: number): void;
@@ -166,6 +170,13 @@ export class Panel {
   private playBtn: HTMLButtonElement | null = null;
   private opener: HTMLElement | null = null;
   private readonly settingsBtn: HTMLButtonElement;
+  /** Download button; shows the recording time and stops the export while recording */
+  private readonly exportBtn: HTMLButtonElement;
+  private readonly exportLabel = h('span', { class: 'rec-time' });
+  /** Choose PC or phone video */
+  readonly exportDialog: HTMLDialogElement;
+  private readonly exportNote = h('p', { class: 'hint' });
+  private recording = false;
   /** Elements made inert while the dialog is open (focus stays inside) */
   private inerted: HTMLElement[] = [];
 
@@ -189,10 +200,62 @@ export class Panel {
       { class: 'tool-btn', title: 'Autopilot (A)', 'aria-label': 'Autopilot', 'aria-pressed': 'false', onclick: () => app.setAuto(!s.auto) },
       icon('Shuffle', 18),
     );
+    this.exportBtn = h(
+      'button',
+      {
+        class: 'tool-btn export-btn',
+        title: 'Stáhnout video',
+        'aria-label': 'Stáhnout video',
+        onclick: () => (this.recording ? app.stopExport() : this.openExport()),
+      },
+      icon('Download', 18),
+      this.exportLabel,
+    );
+    const option = (format: ExportFormat, iconName: string, title: string, detail: string) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: `export-option ${format}`,
+          onclick: () => {
+            this.exportDialog.close();
+            app.startExport(format);
+          },
+        },
+        h('i', { class: 'export-frame' }, icon(iconName, 26)),
+        h('strong', {}, title),
+        h('small', {}, detail),
+      );
+    this.exportDialog = h(
+      'dialog',
+      { class: 'export-dialog', 'aria-labelledby': 'export-title' },
+      h(
+        'header',
+        { class: 'modal-head' },
+        h('h1', { id: 'export-title' }, 'Stáhnout video'),
+        h(
+          'button',
+          { type: 'button', class: 'icon-btn close', title: 'Zavřít (Esc)', 'aria-label': 'Zavřít', onclick: () => this.exportDialog.close() },
+          icon('X', 20),
+        ),
+      ),
+      h(
+        'div',
+        { class: 'export-options' },
+        option('pc', 'Monitor', 'Pro PC', 'Na šířku 16:9, 1920 × 1080'),
+        option('phone', 'Smartphone', 'Pro telefon', 'Na výšku 9:16, 1080 × 1920'),
+      ),
+      this.exportNote,
+    );
+    // Click outside the window closes it
+    this.exportDialog.addEventListener('click', (e) => {
+      if (e.target === this.exportDialog) this.exportDialog.close();
+    });
     this.toolbar = h(
       'div',
       { class: 'toolbar' },
       miniMeter,
+      this.exportBtn,
       this.autoBtn,
       h(
         'button',
@@ -466,6 +529,26 @@ export class Panel {
     this.el.inert = true;
     const saved = TABS.find((t) => t.id === s.settingsTab);
     this.showTab(saved ? saved.id : 'mode');
+  }
+
+  private openExport(): void {
+    this.exportNote.textContent =
+      this.app.source().kind === 'file'
+        ? 'Nahraje se celá skladba od začátku i se zvukem. Ukončit jde dřív stejným tlačítkem.'
+        : 'Nahrává se obraz i zvuk, dokud nahrávání nezastavíš stejným tlačítkem.';
+    this.exportDialog.showModal();
+  }
+
+  /** Recording time in seconds, or null when not recording. */
+  setRecording(seconds: number | null): void {
+    this.recording = seconds !== null;
+    this.exportBtn.classList.toggle('recording', this.recording);
+    this.exportBtn.replaceChildren(icon(this.recording ? 'Square' : 'Download', this.recording ? 14 : 18), this.exportLabel);
+    const s = Math.floor(seconds ?? 0);
+    this.exportLabel.textContent = this.recording ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '';
+    const label = this.recording ? 'Zastavit nahrávání a stáhnout' : 'Stáhnout video';
+    this.exportBtn.title = label;
+    this.exportBtn.setAttribute('aria-label', label);
   }
 
   get isOpen(): boolean {

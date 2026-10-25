@@ -7,6 +7,7 @@ import type { Mode, Palette } from './modes/types';
 import { type OverlayImage, forgetImage, loadImageFile, restoreImage } from './overlay/image';
 import { IMAGE_PALETTE_ID, paletteFromCanvas } from './overlay/imagePalette';
 import { FONTS, renderText } from './overlay/text';
+import { EXPORT_SIZES, type ExportFormat, VideoRecorder, download, exportFileName, pickType } from './export/recorder';
 import { FILTERS } from './render/filters';
 import { Renderer } from './render/Renderer';
 import { DEFAULTS, type Effects, loadSettings, paramValue, saveSettings, variantOf } from './settings';
@@ -96,6 +97,48 @@ async function useImage(file: File): Promise<void> {
     if (job === imageJob) panel.setStatus('Obrázek nejde načíst.', true);
   }
   panel.sync();
+}
+
+let recorder: VideoRecorder | null = null;
+let recordTimer = 0;
+
+/** Record the stage in the chosen format with the source audio; a file source plays once from the start. */
+function startExport(format: ExportFormat): void {
+  if (recorder) return;
+  const type = typeof MediaRecorder === 'undefined' ? null : pickType((t) => MediaRecorder.isTypeSupported(t));
+  if (!type) {
+    panel.setStatus('Tenhle prohlížeč neumí nahrávat video.', true);
+    return;
+  }
+  renderer.setFixedSize(EXPORT_SIZES[format]);
+  renderer.resize(); // the first recorded frame already has the export size
+  canvas.classList.add('exporting');
+  try {
+    recorder = new VideoRecorder(canvas, audio.recordStream(), type, format);
+  } catch (err) {
+    renderer.setFixedSize(null);
+    canvas.classList.remove('exporting');
+    panel.setStatus(`Nahrávání nejde spustit: ${(err as Error).message}`, true);
+    return;
+  }
+  const media = audio.playFromStart();
+  media?.addEventListener('ended', () => void stopExport(), { once: true });
+  panel.setRecording(0);
+  recordTimer = window.setInterval(() => recorder && panel.setRecording(recorder.seconds), 250);
+}
+
+async function stopExport(): Promise<void> {
+  const r = recorder;
+  if (!r) return;
+  recorder = null;
+  clearInterval(recordTimer);
+  panel.setRecording(null);
+  const blob = await r.stop();
+  renderer.setFixedSize(null);
+  canvas.classList.remove('exporting');
+  audio.restoreLoop();
+  download(blob, exportFileName(r.type, r.format, new Date()));
+  panel.setStatus(r.type.startsWith('video/mp4') ? 'Video je stažené.' : 'Video je stažené (WebM, tenhle prohlížeč neumí MP4).');
 }
 
 const autoClock = new AutoClock();
@@ -204,6 +247,8 @@ const actions: PanelActions = {
     if (settings.palette === IMAGE_PALETTE_ID) settings.palette = PALETTES[0].id;
     changed();
   },
+  startExport,
+  stopExport: () => void stopExport(),
   setImageChoice(key, i) {
     settings[key] = i;
     changed();
@@ -265,7 +310,7 @@ const actions: PanelActions = {
 };
 
 const panel = new Panel(actions);
-document.body.append(panel.leftbar, panel.toolbar, panel.el, panel.toast);
+document.body.append(panel.leftbar, panel.toolbar, panel.el, panel.exportDialog, panel.toast);
 audio.onchange = () => panel.sync();
 changed();
 void updateText();

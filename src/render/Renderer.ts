@@ -95,6 +95,8 @@ export class Renderer {
   private kicks = 0;
   /** Mode time scaled by the mode's uSpeed setting, so changing speed never jumps */
   private clock = 0;
+  /** Export size; the canvas is then letterboxed on screen by CSS */
+  private fixed: { width: number; height: number } | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
@@ -231,13 +233,24 @@ export class Renderer {
     return t;
   }
 
-  /** Match the canvas to its CSS size. Returns true when the size changed. */
+  /** Render at a fixed size (video export) instead of the window size; null goes back. */
+  setFixedSize(size: { width: number; height: number } | null): void {
+    this.fixed = size;
+  }
+
+  /** Match the canvas to its CSS size (or the fixed export size). Returns true when the size changed. */
   resize(): boolean {
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cssPixels = this.canvas.clientWidth * this.canvas.clientHeight;
     if (cssPixels * dpr * dpr > MAX_PIXELS) dpr = Math.sqrt(MAX_PIXELS / Math.max(1, cssPixels));
-    const w = Math.max(1, Math.round(this.canvas.clientWidth * dpr));
-    const h = Math.max(1, Math.round(this.canvas.clientHeight * dpr));
+    let w = Math.max(1, Math.round(this.canvas.clientWidth * dpr));
+    let h = Math.max(1, Math.round(this.canvas.clientHeight * dpr));
+    if (this.fixed) {
+      w = this.fixed.width;
+      h = this.fixed.height;
+      // 2D modes scale line widths by dpr: keep them as thick as on a 1080p screen
+      dpr = Math.max(1, Math.min(w, h) / 1080);
+    }
     if (w === this.width && h === this.height && dpr === this.dpr) return false;
     this.width = this.canvas.width = this.g2d.canvas.width = w;
     this.height = this.canvas.height = this.g2d.canvas.height = h;
