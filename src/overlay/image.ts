@@ -89,6 +89,17 @@ export async function restoreImage(): Promise<OverlayImage | null> {
   }
 }
 
+/** Back to the built-in image: forget the stored one and the "removed" mark. */
+export async function resetToDefaultImage(): Promise<OverlayImage | null> {
+  try {
+    localStorage.removeItem(STORE_KEY);
+    localStorage.removeItem(REMOVED_KEY);
+  } catch {
+    // Not critical
+  }
+  return restoreImage();
+}
+
 /** `removed`: the user took the image away, so the default one stays away too. */
 export function forgetImage(removed = false): void {
   try {

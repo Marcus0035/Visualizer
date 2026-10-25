@@ -35,6 +35,7 @@ export interface PanelActions {
   hasImage(): boolean;
   pickImage(): void;
   removeImage(): void;
+  useDefaultImage(): Promise<void>;
   /** Start a video export, or stop the running one */
   startExport(format: ExportFormat, background: boolean): void;
   /** Stops a recording (and downloads it) or cancels a background export */
@@ -528,6 +529,7 @@ export class Panel {
             'div',
             { class: 'overlay-row' },
             h('button', { type: 'button', class: 'btn', onclick: () => app.pickImage() }, icon('ImagePlus'), h('span', {}, 'Choose image')),
+            h('button', { type: 'button', class: 'btn', title: 'Back to the built-in image', onclick: () => void app.useDefaultImage() }, icon('Undo2'), h('span', {}, 'Default')),
             this.removeImageBtn,
           ),
           ...imageChoices,

@@ -5,7 +5,7 @@ import { CUSTOM_PREFIX, loadCustomPalettes, newCustomPalette, saveCustomPalettes
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode, Palette } from './modes/types';
-import { type OverlayImage, forgetImage, loadImageFile, restoreImage } from './overlay/image';
+import { type OverlayImage, forgetImage, loadImageFile, resetToDefaultImage, restoreImage } from './overlay/image';
 import { IMAGE_PALETTE_ID, paletteFromCanvas } from './overlay/imagePalette';
 import { FONTS, renderText } from './overlay/text';
 import { type BeatGrid, analyzeBeats } from './audio/beatgrid';
@@ -400,6 +400,13 @@ const actions: PanelActions = {
   },
   hasImage: () => hasImage,
   pickImage: () => imageInput.click(),
+  async useDefaultImage() {
+    const job = ++imageJob;
+    const img = await resetToDefaultImage();
+    if (!img || job !== imageJob) return;
+    showImage(img);
+    changed();
+  },
   removeImage() {
     imageJob++;
     renderer.setImage(null);
