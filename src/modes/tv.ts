@@ -4,14 +4,14 @@ import type { ModeGL } from './types';
 export const tv: ModeGL = {
   kind: 'gl',
   id: 'tv',
-  name: 'TV šum',
+  name: 'TV static',
   icon: 'Tv',
-  variants: ['Šum', 'Testobraz', 'Ztráta signálu'],
+  variants: ['Static', 'Test card', 'Signal loss'],
   params: [
-    { id: 'uSpeed', label: 'Rychlost', default: 1, min: 0.25, max: 3, step: 0.05 },
-    { id: 'uNoise', label: 'Síla šumu', default: 0.7, min: 0.1, max: 1, step: 0.05 },
-    { id: 'uFlash', label: 'Výpadek na kick', default: 0.6, min: 0, max: 1, step: 0.05 },
-    { id: 'uTint', label: 'Barva', default: 0.5, min: 0, max: 1, step: 0.05 },
+    { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3, step: 0.05 },
+    { id: 'uNoise', label: 'Noise', default: 0.7, min: 0.1, max: 1, step: 0.05 },
+    { id: 'uFlash', label: 'Dropout on kick', default: 0.6, min: 0, max: 1, step: 0.05 },
+    { id: 'uTint', label: 'Color', default: 0.5, min: 0, max: 1, step: 0.05 },
   ],
   // uSpeed is applied by the renderer to uTime and uPhase
   fragment: /* glsl */ `

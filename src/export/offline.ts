@@ -51,7 +51,7 @@ export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
       sampleRate: buffer.sampleRate,
       quality: QUALITY_HIGH,
     });
-    if (!videoCodec || !audioCodec) throw new Error('prohlížeč neumí kódovat video');
+    if (!videoCodec || !audioCodec) throw new Error('this browser cannot encode video');
 
     const target = new BufferTarget();
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });

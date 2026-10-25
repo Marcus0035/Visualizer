@@ -70,9 +70,9 @@ function tracePath(g: CanvasRenderingContext2D, a: AudioFrame, v: View): void {
 export const oscilloscope: Mode2D = {
   kind: '2d',
   id: 'oscilloscope',
-  name: 'Osciloskop',
+  name: 'Oscilloscope',
   icon: 'Activity',
-  variants: ['Vlna', 'Stereo XY', 'Kruh'],
+  variants: ['Wave', 'Stereo XY', 'Circle'],
   glow: 1,
 
   reset(g, v) {

@@ -39,7 +39,7 @@ export const matrix: Mode2D = {
   id: 'matrix',
   name: 'Matrix',
   icon: 'Binary',
-  variants: ['Znaky', 'Binární'],
+  variants: ['Glyphs', 'Binary'],
 
   reset(g, v) {
     setup(g, v);

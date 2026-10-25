@@ -7,14 +7,14 @@ import type { ModeGL } from './types';
 export const particles: ModeGL = {
   kind: 'gl',
   id: 'particles',
-  name: 'Částice',
+  name: 'Particles',
   icon: 'Orbit',
-  variants: ['Výbuch', 'Vír'],
+  variants: ['Blast', 'Swirl'],
   params: [
-    { id: 'uSpeed', label: 'Rychlost', default: 1, min: 0.25, max: 3, step: 0.05 },
-    { id: 'uDensity', label: 'Hustota', default: 1, min: 0.5, max: 2, step: 0.05 },
-    { id: 'uBlast', label: 'Síla výbuchu', default: 0.7, min: 0, max: 1, step: 0.05 },
-    { id: 'uSize', label: 'Velikost teček', default: 1, min: 0.5, max: 2, step: 0.05 },
+    { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3, step: 0.05 },
+    { id: 'uDensity', label: 'Density', default: 1, min: 0.5, max: 2, step: 0.05 },
+    { id: 'uBlast', label: 'Blast strength', default: 0.7, min: 0, max: 1, step: 0.05 },
+    { id: 'uSize', label: 'Dot size', default: 1, min: 0.5, max: 2, step: 0.05 },
   ],
   // uSpeed is applied by the renderer to uTime and uPhase
   fragment: /* glsl */ `

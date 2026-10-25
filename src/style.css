@@ -752,7 +752,7 @@ input[type='range'] {
 }
 
 .dragging::after {
-  content: 'Pusť hudbu nebo obrázek';
+  content: 'Drop music or an image';
   position: fixed;
   inset: 12px;
   z-index: 40;

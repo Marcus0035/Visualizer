@@ -8,15 +8,15 @@ import type { ModeGL } from './types';
 export const motif: ModeGL = {
   kind: 'gl',
   id: 'motif',
-  name: 'Motiv z obrázku',
+  name: 'Image motif',
   icon: 'Sparkles',
-  variants: ['Vitráž', 'Vrstevnice', 'Kaleidoskop', 'Body'],
+  variants: ['Stained glass', 'Contours', 'Kaleidoscope', 'Dots'],
   usesImage: true,
   params: [
-    { id: 'uSpeed', label: 'Rychlost', default: 1, min: 0.25, max: 3, step: 0.05 },
-    { id: 'uDensity', label: 'Hustota', default: 1, min: 0.5, max: 2, step: 0.05 },
-    { id: 'uImageMix', label: 'Barvy z obrázku', default: 1, min: 0, max: 1, step: 0.05 },
-    { id: 'uFlash', label: 'Záblesk na beat', default: 0.5, min: 0, max: 1, step: 0.05 },
+    { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3, step: 0.05 },
+    { id: 'uDensity', label: 'Density', default: 1, min: 0.5, max: 2, step: 0.05 },
+    { id: 'uImageMix', label: 'Image colors', default: 1, min: 0, max: 1, step: 0.05 },
+    { id: 'uFlash', label: 'Flash on beat', default: 0.5, min: 0, max: 1, step: 0.05 },
   ],
   // uSpeed is applied by the renderer to uTime and uPhase
   fragment: /* glsl */ `

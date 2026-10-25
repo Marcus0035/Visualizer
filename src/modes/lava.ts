@@ -4,14 +4,14 @@ import type { ModeGL } from './types';
 export const lava: ModeGL = {
   kind: 'gl',
   id: 'lava',
-  name: 'Lávová lampa',
+  name: 'Lava lamp',
   icon: 'Droplets',
-  variants: ['Lampa', 'Kapky'],
+  variants: ['Lamp', 'Drops'],
   params: [
-    { id: 'uSpeed', label: 'Rychlost', default: 1, min: 0.25, max: 3, step: 0.05 },
-    { id: 'uDensity', label: 'Množství', default: 1, min: 0.5, max: 2, step: 0.05 },
-    { id: 'uSwell', label: 'Nafouknutí na beat', default: 0.6, min: 0, max: 1, step: 0.05 },
-    { id: 'uGlow', label: 'Záře', default: 0.6, min: 0, max: 1, step: 0.05 },
+    { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3, step: 0.05 },
+    { id: 'uDensity', label: 'Amount', default: 1, min: 0.5, max: 2, step: 0.05 },
+    { id: 'uSwell', label: 'Swell on beat', default: 0.6, min: 0, max: 1, step: 0.05 },
+    { id: 'uGlow', label: 'Glow', default: 0.6, min: 0, max: 1, step: 0.05 },
   ],
   // uSpeed is applied by the renderer to uTime and uPhase
   fragment: /* glsl */ `

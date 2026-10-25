@@ -61,53 +61,53 @@ export interface PanelActions {
 export type AutoPart = 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter';
 
 const TABS = [
-  { id: 'sound', label: 'Zvuk', icon: 'AudioLines' },
-  { id: 'mode', label: 'Režim', icon: 'Zap' },
-  { id: 'look', label: 'Barvy a efekty', icon: 'Palette' },
-  { id: 'filters', label: 'Filtry', icon: 'Film' },
+  { id: 'sound', label: 'Sound', icon: 'AudioLines' },
+  { id: 'mode', label: 'Mode', icon: 'Zap' },
+  { id: 'look', label: 'Colors & effects', icon: 'Palette' },
+  { id: 'filters', label: 'Filters', icon: 'Film' },
   { id: 'auto', label: 'Autopilot', icon: 'Shuffle' },
-  { id: 'overlay', label: 'Obrázek a text', icon: 'ImagePlus' },
-  { id: 'keys', label: 'Zkratky', icon: 'Keyboard' },
+  { id: 'overlay', label: 'Image & text', icon: 'ImagePlus' },
+  { id: 'keys', label: 'Shortcuts', icon: 'Keyboard' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
 
 /** Image settings shown as chips; the index is the stored value */
 export const IMAGE_CHOICES = [
-  ['imageStyle', 'Vzhled', ['Barvy palety', 'Obrys', 'Originál']],
-  ['imageShape', 'Ořez', ['Původní', 'Kruh', 'Čtverec', 'Šestiúhelník', 'Srdce']],
-  ['imageMotion', 'Pohyb na beat', ['Klid', 'Pulz', 'Poskok', 'Otáčení', 'Třes']],
-  ['imagePos', 'Poloha', ['Uprostřed', 'Nahoře', 'Dole', 'V rohu']],
+  ['imageStyle', 'Look', ['Palette colors', 'Outline', 'Original']],
+  ['imageShape', 'Crop', ['Original', 'Circle', 'Square', 'Hexagon', 'Heart']],
+  ['imageMotion', 'Motion on beat', ['Still', 'Pulse', 'Bounce', 'Spin', 'Shake']],
+  ['imagePos', 'Position', ['Center', 'Top', 'Bottom', 'Corner']],
 ] as const;
 
 export type ImageChoice = (typeof IMAGE_CHOICES)[number][0];
 
 const SOURCES: { kind: SourceKind; label: string; icon: string }[] = [
   { kind: 'demo', label: 'Demo', icon: 'Music' },
-  { kind: 'input', label: 'Vstup', icon: 'Mic' },
-  { kind: 'file', label: 'Soubor', icon: 'Upload' },
-  { kind: 'tab', label: 'Karta', icon: 'Monitor' },
+  { kind: 'input', label: 'Input', icon: 'Mic' },
+  { kind: 'file', label: 'File', icon: 'Upload' },
+  { kind: 'tab', label: 'Tab', icon: 'Monitor' },
 ];
 
 const SHORTCUTS: [string, string][] = [
-  ['V', 'další varianta'],
-  ['P', 'další paleta'],
-  ['C', 'CRT obrazovka'],
-  ['G', 'zrno'],
-  ['S', 'strobe na beat'],
-  ['X', 'glitch na beat'],
-  ['N', 'další filtr'],
-  ['A', 'autopilot zapnout / vypnout'],
-  ['R', 'autopilot: změnit hned'],
-  ['Kolečko dolů / šipka vpravo', 'náhodný vizuál'],
-  ['Kolečko nahoru / šipka vlevo', 'zpět na předchozí'],
-  ['Mezerník', 'přehrát / pauza souboru'],
-  ['F', 'celá obrazovka'],
-  ['H', 'otevřít / zavřít nastavení'],
-  ['Esc', 'zavřít nastavení'],
+  ['V', 'next variant'],
+  ['P', 'next palette'],
+  ['C', 'CRT screen'],
+  ['G', 'grain'],
+  ['S', 'strobe on beat'],
+  ['X', 'glitch on beat'],
+  ['N', 'next filter'],
+  ['A', 'autopilot on / off'],
+  ['R', 'autopilot: change now'],
+  ['Wheel down / right arrow', 'random visual'],
+  ['Wheel up / left arrow', 'back to previous'],
+  ['Space', 'play / pause file'],
+  ['F', 'fullscreen'],
+  ['H', 'open / close settings'],
+  ['Esc', 'close settings'],
 ];
 
-const BANDS = ['Basy', 'Středy', 'Výšky'];
+const BANDS = ['Bass', 'Mids', 'Highs'];
 
 function card(title: string, ...children: (Node | null)[]): HTMLElement {
   return h('section', { class: 'card' }, h('h2', {}, title), ...children);
@@ -190,7 +190,7 @@ export class Panel {
     const s = app.settings;
 
     // Toolbar
-    const miniMeter = h('div', { class: 'meter', title: 'Basy / středy / výšky' });
+    const miniMeter = h('div', { class: 'meter', title: 'Bass / mids / highs' });
     for (let i = 0; i < 3; i++) {
       const bar = h('i');
       this.meters.push(bar);
@@ -198,7 +198,7 @@ export class Panel {
     }
     this.settingsBtn = h(
       'button',
-      { class: 'tool-btn', title: 'Nastavení (H)', 'aria-label': 'Nastavení', onclick: () => this.open() },
+      { class: 'tool-btn', title: 'Settings (H)', 'aria-label': 'Settings', onclick: () => this.open() },
       icon('Settings', 18),
     );
     this.autoBtn = h(
@@ -210,8 +210,8 @@ export class Panel {
       'button',
       {
         class: 'tool-btn export-btn',
-        title: 'Stáhnout video',
-        'aria-label': 'Stáhnout video',
+        title: 'Download video',
+        'aria-label': 'Download video',
         onclick: () => (this.exportBusy ? app.stopExport() : this.openExport()),
       },
       icon('Download', 18),
@@ -238,23 +238,23 @@ export class Panel {
       h(
         'header',
         { class: 'modal-head' },
-        h('h1', { id: 'export-title' }, 'Stáhnout video'),
+        h('h1', { id: 'export-title' }, 'Download video'),
         h(
           'button',
-          { type: 'button', class: 'icon-btn close', title: 'Zavřít (Esc)', 'aria-label': 'Zavřít', onclick: () => this.exportDialog.close() },
+          { type: 'button', class: 'icon-btn close', title: 'Close (Esc)', 'aria-label': 'Close', onclick: () => this.exportDialog.close() },
           icon('X', 20),
         ),
       ),
       h(
         'div',
         { class: 'export-options' },
-        option('pc', 'Monitor', 'Pro PC', 'Na šířku 16:9, 1920 × 1080'),
-        option('phone', 'Smartphone', 'Pro telefon', 'Na výšku 9:16, 1080 × 1920'),
+        option('pc', 'Monitor', 'For PC', 'Landscape 16:9, 1920 × 1080'),
+        option('phone', 'Smartphone', 'For phone', 'Portrait 9:16, 1080 × 1920'),
       ),
       (this.backgroundRow = h(
         'div',
         { class: 'export-background' },
-        toggle('Na pozadí', true, (on) => {
+        toggle('In the background', true, (on) => {
           this.background = on;
           this.updateExportNote();
         }).row,
@@ -273,7 +273,7 @@ export class Panel {
       this.autoBtn,
       h(
         'button',
-        { class: 'tool-btn', title: 'Celá obrazovka (F)', 'aria-label': 'Celá obrazovka', onclick: () => app.toggleFullscreen() },
+        { class: 'tool-btn', title: 'Fullscreen (F)', 'aria-label': 'Fullscreen', onclick: () => app.toggleFullscreen() },
         icon('Maximize', 18),
       ),
       this.settingsBtn,
@@ -281,7 +281,7 @@ export class Panel {
 
     this.backBtn = h(
       'button',
-      { class: 'tool-btn', title: 'Zpět (kolečko nahoru)', 'aria-label': 'Zpět na předchozí vizuál', onclick: () => app.back() },
+      { class: 'tool-btn', title: 'Back (wheel up)', 'aria-label': 'Back to the previous visual', onclick: () => app.back() },
       icon('Undo2', 18),
     );
     this.leftbar = h(
@@ -289,9 +289,9 @@ export class Panel {
       { class: 'toolbar left' },
       h(
         'button',
-        { class: 'tool-btn random-btn', title: 'Náhodný vizuál (kolečko dolů)', onclick: () => app.randomize() },
+        { class: 'tool-btn random-btn', title: 'Random visual (wheel down)', onclick: () => app.randomize() },
         icon('Dices', 18),
-        h('span', {}, 'Náhodně'),
+        h('span', {}, 'Random'),
       ),
       this.backBtn,
     );
@@ -334,12 +334,12 @@ export class Panel {
     for (const p of PALETTES) palettes.append(this.paletteButton(p));
     const fx = h('div', { class: 'switches' });
     const fxDefs: [keyof Effects, string, string?][] = [
-      ['sections', 'Klid v intru a breaku', 'U nahrané skladby se efekty v klidných částech zastaví'],
-      ['strictPalette', 'Jen barvy palety', 'Filtry, obrázek ani režim nepřidají jiné barvy'],
-      ['crt', 'CRT obrazovka', 'Zakřivení, řádky a barevný posun'],
-      ['grain', 'Zrno', 'Šum jako na filmu'],
-      ['strobe', 'Strobe na beat', 'Blikání, pozor při citlivosti na světlo'],
-      ['glitch', 'Glitch na beat', 'Obraz se na kick roztrhá do pruhů'],
+      ['sections', 'Calm intro and breaks', 'With a loaded track, effects rest in the quiet parts'],
+      ['strictPalette', 'Palette colors only', 'Filters, image and mode cannot add other colors'],
+      ['crt', 'CRT screen', 'Curvature, scanlines and color shift'],
+      ['grain', 'Grain', 'Film-like noise'],
+      ['strobe', 'Strobe on beat', 'Flashing, take care if sensitive to light'],
+      ['glitch', 'Glitch on beat', 'The picture tears into strips on the kick'],
     ];
     for (const [key, label, hint] of fxDefs) {
       const t = toggle(label, s[key], (on) => app.setEffect(key, on), hint);
@@ -350,7 +350,7 @@ export class Panel {
     // Overlay
     this.removeImageBtn = h(
       'button',
-      { class: 'icon-btn', title: 'Odebrat obrázek', 'aria-label': 'Odebrat obrázek', onclick: () => app.removeImage() },
+      { class: 'icon-btn', title: 'Remove image', 'aria-label': 'Remove image', onclick: () => app.removeImage() },
       icon('Trash2'),
     );
     const imageChoices = IMAGE_CHOICES.flatMap(([key, title, names]) => {
@@ -369,8 +369,8 @@ export class Panel {
         type: 'text',
         value: s.text,
         maxLength: 80,
-        placeholder: 'Text, svislá čára = nový řádek',
-        'aria-label': 'Text na obrazovce',
+        placeholder: 'Text, vertical bar = new line',
+        'aria-label': 'Text on screen',
         oninput: (e: Event) => {
           const value = (e.target as HTMLInputElement).value;
           clearTimeout(typing);
@@ -385,7 +385,7 @@ export class Panel {
       fonts.append(b);
     }
 
-    this.paramsCard = card('Nastavení režimu', this.paramsBox);
+    this.paramsCard = card('Mode settings', this.paramsBox);
     this.paramsBox.addEventListener('pointerdown', () => (this.draggingParam = true));
     window.addEventListener('pointerup', () => (this.draggingParam = false));
     window.addEventListener('pointercancel', () => (this.draggingParam = false));
@@ -403,11 +403,11 @@ export class Panel {
       this.filterBtns.push(b);
       filters.append(b);
     });
-    const filterBeat = toggle('Silnější na kick', s.filterBeat, (on) => app.setFilterBeat(on), 'Filtr na každý kick zesílí');
+    const filterBeat = toggle('Stronger on kick', s.filterBeat, (on) => app.setFilterBeat(on), 'The filter gets stronger on every kick');
     this.filterBeatSet = filterBeat.set;
 
     // Autopilot
-    const autoOn = toggle('Autopilot', s.auto, (on) => app.setAuto(on), 'Sám střídá režimy a jejich nastavení, vždy na kick');
+    const autoOn = toggle('Autopilot', s.auto, (on) => app.setAuto(on), 'Switches modes and their settings by itself, on the kick');
     this.autoSetters.set('auto', autoOn.set);
     const autoBeats = h('div', { class: 'chips' });
     for (const n of AUTO_EVERY) {
@@ -417,11 +417,11 @@ export class Panel {
     }
     const autoParts = h('div', { class: 'switches' });
     const partDefs: [AutoPart, string, string][] = [
-      ['autoMode', 'Režim', 'Přepíná mezi vybranými režimy'],
-      ['autoVariant', 'Varianta', 'Např. tunel, lasery, bloky'],
-      ['autoParams', 'Nastavení režimu', 'Rychlost, hustota, záblesk, jas'],
-      ['autoPalette', 'Barvy', 'Jen tmavé palety s jednou barvou'],
-      ['autoFilter', 'Filtr', 'Občas filtr přes celý obraz, občas čistý obraz'],
+      ['autoMode', 'Mode', 'Switches between the selected modes'],
+      ['autoVariant', 'Variant', 'E.g. tunnel, lasers, blocks'],
+      ['autoParams', 'Mode settings', 'Speed, density, flash, brightness'],
+      ['autoPalette', 'Colors', 'Only dark single-color palettes'],
+      ['autoFilter', 'Filter', 'Sometimes a full-screen filter, sometimes a clean picture'],
     ];
     for (const [key, label, hint] of partDefs) {
       const t = toggle(label, s[key], (on) => app.setAutoPart(key, on), hint);
@@ -438,68 +438,68 @@ export class Panel {
 
     const panels: Record<TabId, HTMLElement[]> = {
       sound: [
-        card('Zdroj zvuku', sources, this.sourceExtra, this.status),
+        card('Sound source', sources, this.sourceExtra, this.status),
         card(
-          'Úrovně',
-          slider('Citlivost', 0.25, 4, 0.05, s.sensitivity, (v) => app.setSensitivity(v)),
-          slider('Hlasitost', 0, 1, 0.01, s.volume, (v) => app.setVolume(v)),
+          'Levels',
+          slider('Sensitivity', 0.25, 4, 0.05, s.sensitivity, (v) => app.setSensitivity(v)),
+          slider('Volume', 0, 1, 0.01, s.volume, (v) => app.setVolume(v)),
           levels,
-          h('small', { class: 'hint' }, 'Citlivost nastav tak, aby basy na kopák skoro došly nahoru.'),
+          h('small', { class: 'hint' }, 'Set the sensitivity so the bass almost reaches the top on the kick.'),
         ),
       ],
-      mode: [card('Režim', modes, h('h3', {}, 'Varianta'), this.variantBox), this.paramsCard],
-      look: [h('section', { class: 'card wide' }, h('h2', {}, 'Paleta'), palettes), card('Efekty', fx)],
+      mode: [card('Mode', modes, h('h3', {}, 'Variant'), this.variantBox), this.paramsCard],
+      look: [h('section', { class: 'card wide' }, h('h2', {}, 'Palette'), palettes), card('Effects', fx)],
       filters: [
-        h('section', { class: 'card wide' }, h('h2', {}, 'Filtr přes celý obraz'), filters),
+        h('section', { class: 'card wide' }, h('h2', {}, 'Full-screen filter'), filters),
         card(
-          'Nastavení filtru',
-          slider('Síla', 0, 1, 0.01, s.filterAmount, (v) => app.setFilterAmount(v)),
+          'Filter settings',
+          slider('Strength', 0, 1, 0.01, s.filterAmount, (v) => app.setFilterAmount(v)),
           filterBeat.row,
-          h('small', { class: 'hint' }, 'Filtr běží pořád přes jakýkoli režim, obrázek i text.'),
+          h('small', { class: 'hint' }, 'The filter runs over any mode, image and text.'),
         ),
       ],
       auto: [
         card(
           'Autopilot',
           autoOn.row,
-          h('div', { class: 'param-options' }, h('span', {}, 'Změna po kolika kicích'), autoBeats),
-          h('button', { type: 'button', class: 'btn', onclick: () => app.autoNow() }, icon('Shuffle'), h('span', {}, 'Změnit hned')),
-          h('small', { class: 'hint' }, 'Bez jasného kicku mění podle času. Ruční změny fungují dál.'),
+          h('div', { class: 'param-options' }, h('span', {}, 'Change every N kicks'), autoBeats),
+          h('button', { type: 'button', class: 'btn', onclick: () => app.autoNow() }, icon('Shuffle'), h('span', {}, 'Change now')),
+          h('small', { class: 'hint' }, 'Without a clear kick it changes by time. Manual changes still work.'),
         ),
-        card('Co se mění', autoParts),
-        card('Režimy v autopilotu', autoModes, h('small', { class: 'hint' }, 'Vypnutý režim autopilot přeskočí.')),
+        card('What changes', autoParts),
+        card('Modes in the autopilot', autoModes, h('small', { class: 'hint' }, 'The autopilot skips modes that are off.')),
       ],
       overlay: [
         card(
-          'Obrázek',
+          'Image',
           h(
             'div',
             { class: 'overlay-row' },
-            h('button', { type: 'button', class: 'btn', onclick: () => app.pickImage() }, icon('ImagePlus'), h('span', {}, 'Vybrat obrázek')),
+            h('button', { type: 'button', class: 'btn', onclick: () => app.pickImage() }, icon('ImagePlus'), h('span', {}, 'Choose image')),
             this.removeImageBtn,
           ),
           ...imageChoices,
-          slider('Viditelnost', 0.1, 1, 0.01, s.imageOpacity, (v) => app.setImageAmount('imageOpacity', v)),
-          slider('Záře kolem', 0, 1, 0.01, s.imageGlow, (v) => app.setImageAmount('imageGlow', v)),
-          slider('Rozmazání do ztracena', 0, 1, 0.01, s.imageFade, (v) => app.setImageAmount('imageFade', v)),
-          h('small', { class: 'hint' }, 'Obrázek jde i přetáhnout do okna.'),
+          slider('Opacity', 0.1, 1, 0.01, s.imageOpacity, (v) => app.setImageAmount('imageOpacity', v)),
+          slider('Glow around', 0, 1, 0.01, s.imageGlow, (v) => app.setImageAmount('imageGlow', v)),
+          slider('Fade out edges', 0, 1, 0.01, s.imageFade, (v) => app.setImageAmount('imageFade', v)),
+          h('small', { class: 'hint' }, 'You can also drop an image onto the window.'),
         ),
-        card('Text', textInput, h('h3', {}, 'Písmo'), fonts),
-        card('Velikost', slider('Obrázek a text', 0.2, 1, 0.01, s.overlaySize, (v) => app.setOverlaySize(v))),
+        card('Text', textInput, h('h3', {}, 'Font'), fonts),
+        card('Size', slider('Image and text', 0.2, 1, 0.01, s.overlaySize, (v) => app.setOverlaySize(v))),
       ],
       keys: [
         card(
-          'Klávesové zkratky',
+          'Keyboard shortcuts',
           h(
             'dl',
             { class: 'keys' },
-            ...[[`1 - ${app.modes.length}`, 'režim'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
+            ...[[`1 - ${app.modes.length}`, 'mode'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
           ),
         ),
       ],
     };
 
-    const tablist = h('nav', { class: 'tabs', role: 'tablist', 'aria-label': 'Sekce nastavení' });
+    const tablist = h('nav', { class: 'tabs', role: 'tablist', 'aria-label': 'Settings sections' });
     const body = h('div', { class: 'modal-body' });
     for (const t of TABS) {
       const btn = h(
@@ -522,7 +522,7 @@ export class Panel {
 
     this.closeBtn = h(
       'button',
-      { class: 'icon-btn close', title: 'Zavřít (Esc)', 'aria-label': 'Zavřít nastavení', onclick: () => this.close() },
+      { class: 'icon-btn close', title: 'Close (Esc)', 'aria-label': 'Close settings', onclick: () => this.close() },
       icon('X', 20),
     );
 
@@ -532,7 +532,7 @@ export class Panel {
       h(
         'div',
         { class: 'modal-window' },
-        h('header', { class: 'modal-head' }, h('h1', { id: 'settings-title' }, 'Nastavení'), tablist, this.closeBtn),
+        h('header', { class: 'modal-head' }, h('h1', { id: 'settings-title' }, 'Settings'), tablist, this.closeBtn),
         body,
       ),
     );
@@ -553,10 +553,10 @@ export class Panel {
     this.backgroundRow.hidden = !canBackground;
     this.exportNote.textContent =
       canBackground && this.background
-        ? 'Video se vyrobí z celé skladby rychleji než v reálném čase. Appku mezitím můžeš normálně používat.'
+        ? 'The video is made from the whole track faster than real time. You can keep using the app meanwhile.'
         : this.app.source().kind === 'file'
-          ? 'Nahraje se celá skladba od začátku i se zvukem. Ukončit jde dřív stejným tlačítkem.'
-          : 'Nahrává se obraz i zvuk, dokud nahrávání nezastavíš stejným tlačítkem.';
+          ? 'Records the whole track from the start, with sound. Stop earlier with the same button.'
+          : 'Records picture and sound until you stop it with the same button.';
   }
 
   private openExport(): void {
@@ -576,15 +576,15 @@ export class Panel {
 
   /** Recording time in seconds, or null when not recording. */
   setRecording(seconds: number | null): void {
-    if (seconds === null) return this.exportState(false, 'Download', '', 'Stáhnout video');
+    if (seconds === null) return this.exportState(false, 'Download', '', 'Download video');
     const s = Math.floor(seconds);
-    this.exportState(true, 'Square', `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, 'Zastavit nahrávání a stáhnout');
+    this.exportState(true, 'Square', `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, 'Stop recording and download');
   }
 
   /** Background export progress 0..1, or null when done. */
   setExportProgress(fraction: number | null): void {
-    if (fraction === null) return this.exportState(false, 'Download', '', 'Stáhnout video');
-    this.exportState(true, 'X', `${Math.floor(fraction * 100)} %`, 'Zrušit výrobu videa');
+    if (fraction === null) return this.exportState(false, 'Download', '', 'Download video');
+    this.exportState(true, 'X', `${Math.floor(fraction * 100)} %`, 'Cancel the video');
     this.exportBtn.classList.add('rendering');
   }
 
@@ -737,7 +737,7 @@ export class Panel {
       }
     }
     if (this.playBtn) {
-      this.playBtn.setAttribute('aria-label', src.playing ? 'Pauza' : 'Přehrát');
+      this.playBtn.setAttribute('aria-label', src.playing ? 'Pause' : 'Play');
       this.playBtn.replaceChildren(icon(src.playing ? 'Pause' : 'Play'));
     }
   }
@@ -771,7 +771,7 @@ export class Panel {
       return slider(p.label, p.min ?? 0, p.max ?? 1, p.step ?? 0.01, value, (v) => this.app.setParam(p.id, v));
     });
 
-    const reset = h('button', { type: 'button', class: 'link-btn' }, 'Výchozí nastavení');
+    const reset = h('button', { type: 'button', class: 'link-btn' }, 'Reset to defaults');
     reset.addEventListener('click', () => {
       this.app.resetParams();
       this.paramsFor = '';
@@ -786,16 +786,16 @@ export class Panel {
     const select = h(
       'select',
       {
-        'aria-label': 'Vstupní zařízení',
+        'aria-label': 'Input device',
         onchange: (e: Event) => void this.run(this.app.useInput((e.target as HTMLSelectElement).value)),
       },
       ...devices.map((d, i) =>
-        h('option', { value: d.deviceId, selected: d.deviceId === this.app.settings.inputDevice }, d.label || `Vstup ${i + 1}`),
+        h('option', { value: d.deviceId, selected: d.deviceId === this.app.settings.inputDevice }, d.label || `Input ${i + 1}`),
       ),
     );
     this.sourceExtra.replaceChildren(
       select,
-      h('small', { class: 'hint' }, 'Zvuk systému: vyber zařízení „Monitor of …“'),
+      h('small', { class: 'hint' }, 'System sound: pick the “Monitor of …” device'),
     );
   }
 

@@ -13,7 +13,7 @@ export interface OverlayFont {
 export const FONTS: OverlayFont[] = [
   { id: 'anton', name: 'Anton', family: 'Anton', weight: 400 },
   { id: 'unbounded', name: 'Unbounded', family: 'Unbounded', weight: 900 },
-  { id: 'gothic', name: 'Gotika', family: 'UnifrakturMaguntia', weight: 400 },
+  { id: 'gothic', name: 'Gothic', family: 'UnifrakturMaguntia', weight: 400 },
   { id: 'mono', name: 'Mono', family: 'Space Mono', weight: 700 },
 ];
 

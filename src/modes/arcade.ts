@@ -6,11 +6,11 @@ export const arcade: ModeGL = {
   id: 'arcade',
   name: '8-bit',
   icon: 'Gamepad2',
-  variants: ['Hvězdy', 'Mřížka', 'Vetřelci'],
+  variants: ['Stars', 'Grid', 'Invaders'],
   params: [
-    { id: 'uSpeed', label: 'Rychlost', default: 1, min: 0.25, max: 3, step: 0.05 },
-    { id: 'uPixel', label: 'Velikost pixelu', default: 6, min: 2, max: 16, step: 1 },
-    { id: 'uFlash', label: 'Záblesk na kick', default: 0.5, min: 0, max: 1, step: 0.05 },
+    { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3, step: 0.05 },
+    { id: 'uPixel', label: 'Pixel size', default: 6, min: 2, max: 16, step: 1 },
+    { id: 'uFlash', label: 'Flash on kick', default: 0.5, min: 0, max: 1, step: 0.05 },
   ],
   // uSpeed is applied by the renderer to uTime and uPhase
   fragment: /* glsl */ `

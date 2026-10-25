@@ -49,7 +49,7 @@ try {
   renderer = new Renderer(canvas);
   MODES.forEach((m) => renderer.prepare(m));
 } catch (err) {
-  document.body.append(h('div', { class: 'fatal' }, `Nelze spustit grafiku: ${(err as Error).message}`));
+  document.body.append(h('div', { class: 'fatal' }, `Cannot start graphics: ${(err as Error).message}`));
   throw err;
 }
 
@@ -92,7 +92,7 @@ async function useTrack(file: File): Promise<void> {
     if (job !== trackJob) return;
     track = { buffer, structure: SongStructure.analyze(buffer) };
     const calm = track.structure.sections.filter((s) => s.kind !== 'drive').length;
-    if (calm) panel.setStatus(`Skladba rozpoznaná: ${calm} ${calm === 1 ? 'klidná část' : calm < 5 ? 'klidné části' : 'klidných částí'} (intro, breaky, outro).`);
+    if (calm) panel.setStatus(`Track analysed: ${calm} quiet ${calm === 1 ? 'part' : 'parts'} (intro, breaks, outro).`);
   } catch {
     // Plays, but cannot be decoded here: no structure and no background export
   }
@@ -145,9 +145,9 @@ async function useImage(file: File): Promise<void> {
     settings.mode = 'motif';
     settings.palette = IMAGE_PALETTE_ID;
     changed();
-    panel.setStatus(saved ? '' : 'Obrázek je moc velký na uložení, po restartu zmizí.');
+    panel.setStatus(saved ? '' : 'The image is too big to keep, it will be gone after a restart.');
   } catch {
-    if (job === imageJob) panel.setStatus('Obrázek nejde načíst.', true);
+    if (job === imageJob) panel.setStatus('The image cannot be loaded.', true);
   }
   panel.sync();
 }
@@ -190,10 +190,10 @@ async function exportInBackground(format: ExportFormat): Promise<void> {
     });
     if (blob) {
       download(blob, exportFileName('video/mp4', format, new Date()));
-      panel.setStatus('Video je hotové a stažené.');
-    } else panel.setStatus('Výroba videa zrušena.');
+      panel.setStatus('The video is done and downloaded.');
+    } else panel.setStatus('Video cancelled.');
   } catch (err) {
-    panel.setStatus(`Video nejde vyrobit: ${(err as Error).message}`, true);
+    panel.setStatus(`Cannot make the video: ${(err as Error).message}`, true);
   } finally {
     if (offline === ctrl) offline = null;
     panel.setExportProgress(null);
@@ -208,7 +208,7 @@ function startExport(format: ExportFormat, background = false): void {
   if (recorder || offline) return;
   const type = typeof MediaRecorder === 'undefined' ? null : pickType((t) => MediaRecorder.isTypeSupported(t));
   if (!type) {
-    panel.setStatus('Tenhle prohlížeč neumí nahrávat video.', true);
+    panel.setStatus('This browser cannot record video.', true);
     return;
   }
   renderer.setFixedSize(EXPORT_SIZES[format]);
@@ -219,7 +219,7 @@ function startExport(format: ExportFormat, background = false): void {
   } catch (err) {
     renderer.setFixedSize(null);
     canvas.classList.remove('exporting');
-    panel.setStatus(`Nahrávání nejde spustit: ${(err as Error).message}`, true);
+    panel.setStatus(`Cannot start recording: ${(err as Error).message}`, true);
     return;
   }
   const media = audio.playFromStart();
@@ -245,7 +245,7 @@ async function stopExport(): Promise<void> {
   canvas.classList.remove('exporting');
   audio.restoreLoop();
   download(blob, exportFileName(r.type, r.format, new Date()));
-  panel.setStatus(r.type.startsWith('video/mp4') ? 'Video je stažené.' : 'Video je stažené (WebM, tenhle prohlížeč neumí MP4).');
+  panel.setStatus(r.type.startsWith('video/mp4') ? 'The video is downloaded.' : 'The video is downloaded (WebM, this browser cannot record MP4).');
 }
 
 const autoClock = new AutoClock();
@@ -403,7 +403,7 @@ const actions: PanelActions = {
   },
   setAutoSkip(modeId, skip) {
     const rest = settings.autoSkip.filter((id) => id !== modeId);
-    if (skip && rest.length + 1 >= MODES.length) return panel.setStatus('Aspoň jeden režim musí v autopilotu zůstat.');
+    if (skip && rest.length + 1 >= MODES.length) return panel.setStatus('At least one mode has to stay in the autopilot.');
     settings.autoSkip = skip ? [...rest, modeId] : rest;
     changed();
   },
@@ -439,7 +439,7 @@ async function playFile(file: File): Promise<void> {
   try {
     await useTrack(file);
   } catch (err) {
-    panel.setStatus(`Soubor nejde přehrát: ${(err as Error).message}`, true);
+    panel.setStatus(`Cannot play the file: ${(err as Error).message}`, true);
   }
   panel.sync();
 }
@@ -511,7 +511,7 @@ window.addEventListener('keydown', (e) => {
       return actions.setFilter((settings.filter + 1) % FILTERS.length);
     case 'a':
       actions.setAuto(!settings.auto);
-      return panel.setStatus(settings.auto ? 'Autopilot zapnutý' : 'Autopilot vypnutý');
+      return panel.setStatus(settings.auto ? 'Autopilot on' : 'Autopilot off');
     case 'r':
       return autoJump();
     case 'arrowright':
@@ -570,7 +570,7 @@ async function useDevAudio(): Promise<boolean> {
     const res = await fetch('/dev-audio');
     if (!res.ok) return false;
     const blob = await res.blob();
-    const name = decodeURIComponent(res.headers.get('X-Audio-Name') ?? 'skladba');
+    const name = decodeURIComponent(res.headers.get('X-Audio-Name') ?? 'track');
     await useTrack(new File([blob], name, { type: blob.type }));
     return true;
   } catch {
@@ -593,9 +593,9 @@ const start = h(
       },
     },
     icon('Play', 22),
-    h('span', {}, 'Spustit'),
+    h('span', {}, 'Start'),
   ),
-  h('p', {}, 'Startuje s demo smyčkou. Zdroj zvuku a vše ostatní najdeš v nastavení vpravo nahoře.'),
+  h('p', {}, 'Starts with a demo loop. The sound source and everything else are in the settings, top right.'),
 );
 document.body.append(start);
 

@@ -100,7 +100,7 @@ export class Renderer {
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
-    if (!gl) throw new Error('WebGL2 není k dispozici');
+    if (!gl) throw new Error('WebGL2 is not available');
     this.gl = gl;
     this.g2d = document.createElement('canvas').getContext('2d', { alpha: false })!;
     this.post = link(gl, POST_FRAG);

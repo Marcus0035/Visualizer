@@ -5,7 +5,7 @@ export const plasma: ModeGL = {
   id: 'plasma',
   name: 'Plasma',
   icon: 'Waves',
-  variants: ['Tekutá', 'Světelné tyče'],
+  variants: ['Liquid', 'Light bars'],
   fragment: /* glsl */ `
 vec3 pal(float t) {
   t = fract(t);

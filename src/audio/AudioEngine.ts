@@ -150,7 +150,7 @@ export class AudioEngine {
     const node = this.ctx.createBufferSource();
     node.buffer = this.demoBuffer;
     node.loop = true;
-    this.attach(node, 'demo', 'Demo smyčka', true);
+    this.attach(node, 'demo', 'Demo loop', true);
     node.start();
   }
 
@@ -184,7 +184,7 @@ export class AudioEngine {
       return '';
     }
     const track = stream.getAudioTracks()[0];
-    this.attach(this.ctx.createMediaStreamSource(stream), 'input', track?.label || 'Vstup', false, { stream });
+    this.attach(this.ctx.createMediaStreamSource(stream), 'input', track?.label || 'Input', false, { stream });
     return track?.getSettings().deviceId ?? '';
   }
 
@@ -196,11 +196,11 @@ export class AudioEngine {
     if (gen !== this.generation || stream.getAudioTracks().length === 0) {
       stream.getTracks().forEach((t) => t.stop());
       if (gen !== this.generation) return;
-      throw new Error('Sdílení neobsahuje zvuk. Při výběru zapni sdílení zvuku.');
+      throw new Error('The share has no audio. Turn on audio sharing when picking.');
     }
     // Only the audio is needed
     stream.getVideoTracks().forEach((t) => t.stop());
-    this.attach(this.ctx.createMediaStreamSource(stream), 'tab', 'Sdílený zvuk', false, { stream });
+    this.attach(this.ctx.createMediaStreamSource(stream), 'tab', 'Shared audio', false, { stream });
   }
 
   async useFile(file: File): Promise<void> {
@@ -221,7 +221,7 @@ export class AudioEngine {
     if (gen !== this.generation) return discard();
     if (!ok) {
       discard();
-      throw new Error('formát není podporovaný');
+      throw new Error('unsupported format');
     }
     this.attach(this.ctx.createMediaElementSource(el), 'file', file.name, true, { media: el });
     el.addEventListener('play', () => this.onchange());

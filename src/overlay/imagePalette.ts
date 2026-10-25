@@ -114,7 +114,7 @@ export function paletteFromPixels(rgba: Uint8ClampedArray): Palette {
   const lightest = [...clusters].sort((x, y) => luma(y.color) - luma(x.color))[0].color;
   const c = mix(mix(a, lightest, 0.5), [1, 1, 1], 0.35);
   const bg = mix(a, [0, 0, 0], 0.95);
-  return { id: IMAGE_PALETTE_ID, name: 'Z obrázku', bg: toHex(bg), a: toHex(a), b: toHex(b), c: toHex(c) };
+  return { id: IMAGE_PALETTE_ID, name: 'From image', bg: toHex(bg), a: toHex(a), b: toHex(b), c: toHex(c) };
 }
 
 /** Palette of a loaded image canvas (read at a small size, it only needs the color spread). */
