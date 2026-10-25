@@ -58,7 +58,7 @@ export interface Settings extends Effects {
   autoParams: boolean;
   autoPalette: boolean;
   autoFilter: boolean;
-  /** Image crop, motion and position */
+  /** Image motion and position (the crop stays as set) */
   autoImage: boolean;
   /** Mode ids the autopilot leaves out */
   autoSkip: string[];

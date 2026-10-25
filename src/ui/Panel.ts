@@ -422,7 +422,7 @@ export class Panel {
       ['autoParams', 'Mode settings', 'Speed, density, flash, brightness'],
       ['autoPalette', 'Colors', 'Only dark single-color palettes'],
       ['autoFilter', 'Filter', 'Sometimes a full-screen filter, sometimes a clean picture'],
-      ['autoImage', 'Image', 'Crop, motion on beat and position'],
+      ['autoImage', 'Image', 'Motion on beat and position'],
     ];
     for (const [key, label, hint] of partDefs) {
       const t = toggle(label, s[key], (on) => app.setAutoPart(key, on), hint);

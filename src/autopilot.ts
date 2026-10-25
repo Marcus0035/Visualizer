@@ -44,7 +44,7 @@ export interface AutoContext {
   modes: readonly Mode[];
   palettes: readonly Palette[];
   filterCount: number;
-  /** Number of choices per image setting (crop, motion, position) */
+  /** Number of choices per image setting the autopilot may change */
   imageChoices?: Partial<Record<ImageChoiceKey, number>>;
 }
 
