@@ -404,6 +404,7 @@ const actions: PanelActions = {
     const job = ++imageJob;
     const img = await resetToDefaultImage();
     if (!img || job !== imageJob) return;
+    settings.imageStyle = DEFAULTS.imageStyle;
     showImage(img);
     changed();
   },

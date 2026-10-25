@@ -90,7 +90,7 @@ export const DEFAULTS: Settings = {
   glitch: false,
   strictPalette: false,
   sections: true,
-  imageStyle: 0,
+  imageStyle: 1,
   imageShape: 0,
   imageMotion: 1,
   imagePos: 0,
