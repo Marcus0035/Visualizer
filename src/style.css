@@ -593,6 +593,106 @@ select option {
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+.palette-item {
+  position: relative;
+  display: grid;
+}
+
+.palette-remove {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.palette-remove:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.palette-new {
+  justify-content: center;
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.palette-new:hover {
+  color: var(--text);
+}
+
+.palette-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.palette-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.palette-drop:hover,
+.palette-drop.over {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.palette-drop .hint {
+  margin: 0;
+  pointer-events: none;
+}
+
+.palette-preview {
+  height: 56px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.palette-colors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.palette-color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.palette-color input {
+  width: 40px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+}
+
+.palette-dialog .overlay-row {
+  justify-content: flex-end;
+}
+
+.palette-dialog .overlay-row .btn {
+  flex: none;
+}
+
 /* Sliders */
 .slider {
   display: grid;

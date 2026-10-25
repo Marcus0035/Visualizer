@@ -127,3 +127,17 @@ export function paletteFromCanvas(source: HTMLCanvasElement): Palette {
   g.drawImage(source, 0, 0, small.width, small.height);
   return paletteFromPixels(g.getImageData(0, 0, small.width, small.height).data);
 }
+
+/** Palette of an image file, without showing the image anywhere. */
+export async function paletteFromFile(file: File): Promise<Palette> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+    return paletteFromCanvas(canvas);
+  } finally {
+    bitmap.close();
+  }
+}

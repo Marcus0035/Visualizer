@@ -1,6 +1,7 @@
 import './style.css';
 import { AudioEngine } from './audio/AudioEngine';
 import { AUTO_EVERY, AutoClock, type AutoContext, type AutoParts, EVERYTHING, autoStep } from './autopilot';
+import { CUSTOM_PREFIX, loadCustomPalettes, newCustomPalette, saveCustomPalettes } from './customPalettes';
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode, Palette } from './modes/types';
@@ -18,13 +19,14 @@ import { h, icon } from './ui/dom';
 import { IMAGE_CHOICES, Panel, type PanelActions, type RandomPart } from './ui/Panel';
 
 const settings = loadSettings();
+let customPalettes = loadCustomPalettes();
 if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
 // Forget variants and settings of modes that no longer exist
 for (const store of [settings.variants, settings.params]) {
   for (const id of Object.keys(store)) if (!MODES.some((m) => m.id === id)) delete store[id];
 }
 // The image palette comes back once the stored image is restored
-if (settings.palette !== IMAGE_PALETTE_ID && !PALETTES.some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
+if (settings.palette !== IMAGE_PALETTE_ID && ![...customPalettes, ...PALETTES].some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
 if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
 if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
 settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
@@ -67,7 +69,7 @@ let hasImage = false;
 /** Colors taken from the user image, offered as the first palette */
 let imagePalette: Palette | null = null;
 
-const allPalettes = (): Palette[] => (imagePalette ? [imagePalette, ...PALETTES] : PALETTES);
+const allPalettes = (): Palette[] => [...(imagePalette ? [imagePalette] : []), ...customPalettes, ...PALETTES];
 const paletteOf = (s: Settings): Palette => allPalettes().find((p) => p.id === s.palette) ?? PALETTES[0];
 const currentPalette = (): Palette => paletteOf(settings);
 
@@ -346,6 +348,22 @@ const actions: PanelActions = {
     settings.palette = id;
     changed();
   },
+  addPalette(name, colors) {
+    const p = newCustomPalette(customPalettes, name, colors);
+    customPalettes = [...customPalettes, p];
+    saveCustomPalettes(customPalettes);
+    panel.setCustomPalettes(customPalettes);
+    settings.palette = p.id;
+    changed();
+  },
+  removePalette(id) {
+    if (!id.startsWith(CUSTOM_PREFIX)) return;
+    customPalettes = customPalettes.filter((p) => p.id !== id);
+    saveCustomPalettes(customPalettes);
+    panel.setCustomPalettes(customPalettes);
+    if (settings.palette === id) settings.palette = PALETTES[0].id;
+    changed();
+  },
   setSensitivity(v) {
     settings.sensitivity = audio.sensitivity = v;
     saveSettings(settings);
@@ -450,6 +468,7 @@ const actions: PanelActions = {
 };
 
 const panel = new Panel(actions);
+panel.setCustomPalettes(customPalettes);
 document.body.append(panel.leftbar, panel.toolbar, panel.el, panel.exportDialog, panel.toast);
 audio.onchange = () => panel.sync();
 changed();
@@ -507,7 +526,7 @@ window.addEventListener('drop', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if (start.isConnected) return; // nothing to control before the start click
-  if (e.key === 'Escape' && panel.isOpen) return panel.close();
+  if (e.key === 'Escape' && panel.isOpen) return document.querySelector('dialog[open]') ? undefined : panel.close();
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
   const target = e.target as HTMLElement;
   if (target.matches('input, select, textarea')) return;

@@ -3,7 +3,7 @@ import type { SourceKind } from '../audio/AudioEngine';
 import { PALETTES } from '../modes/palettes';
 import type { Mode, Palette } from '../modes/types';
 import { AUTO_EVERY } from '../autopilot';
-import { IMAGE_PALETTE_ID } from '../overlay/imagePalette';
+import { IMAGE_PALETTE_ID, paletteFromFile } from '../overlay/imagePalette';
 import { FONTS } from '../overlay/text';
 import type { ExportFormat } from '../export/recorder';
 import { FILTERS } from '../render/filters';
@@ -20,6 +20,8 @@ export interface PanelActions {
   setParam(id: string, value: number): void;
   resetParams(): void;
   setPalette(id: string): void;
+  addPalette(name: string, colors: Pick<Palette, 'bg' | 'a' | 'b' | 'c'>): void;
+  removePalette(id: string): void;
   setSensitivity(value: number): void;
   setVolume(value: number): void;
   setEffect(key: keyof Effects, on: boolean): void;
@@ -151,6 +153,7 @@ export class Panel {
   private readonly modeBtns = new Map<string, HTMLButtonElement>();
   private readonly paletteBtns = new Map<string, HTMLButtonElement>();
   private readonly paletteGrid = h('div', { class: 'palette-grid' });
+  private readonly customItems: HTMLElement[] = [];
   private readonly variantBox = h('div', { class: 'chips' });
   private readonly sourceExtra = h('div', { class: 'source-extra' });
   private readonly fxSetters = new Map<keyof Effects, (on: boolean) => void>();
@@ -345,6 +348,15 @@ export class Panel {
     // Look
     const palettes = this.paletteGrid;
     for (const p of PALETTES) palettes.append(this.paletteButton(p));
+    const paletteDialog = this.buildPaletteDialog();
+    palettes.append(
+      h(
+        'button',
+        { type: 'button', class: 'palette-btn palette-new', onclick: () => paletteDialog.showModal() },
+        icon('Plus', 18),
+        h('span', {}, 'New palette'),
+      ),
+    );
     const fx = h('div', { class: 'switches' });
     const fxDefs: [keyof Effects, string, string?][] = [
       ['sections', 'Calm intro and breaks', 'With a loaded track, effects rest in the quiet parts'],
@@ -462,7 +474,7 @@ export class Panel {
         ),
       ],
       mode: [card('Mode', modes, h('h3', {}, 'Variant'), this.variantBox), this.paramsCard],
-      look: [h('section', { class: 'card wide' }, h('h2', {}, 'Palette'), palettes), card('Effects', fx)],
+      look: [h('section', { class: 'card wide' }, h('h2', {}, 'Palette'), palettes, paletteDialog), card('Effects', fx)],
       filters: [
         h('section', { class: 'card wide' }, h('h2', {}, 'Full-screen filter'), filters),
         card(
@@ -691,6 +703,137 @@ export class Panel {
     b.style.setProperty('--swatch', p.a);
     this.paletteBtns.set(p.id, b);
     return b;
+  }
+
+  /** The user's own palettes, right after the one from the image. */
+  setCustomPalettes(list: readonly Palette[]): void {
+    for (const item of this.customItems.splice(0)) item.remove();
+    for (const p of list) this.paletteBtns.delete(p.id);
+    const before = this.paletteBtns.get(PALETTES[0].id) ?? null;
+    for (const p of list) {
+      const item = h(
+        'div',
+        { class: 'palette-item' },
+        this.paletteButton(p),
+        h(
+          'button',
+          { type: 'button', class: 'palette-remove', title: `Delete ${p.name}`, 'aria-label': `Delete ${p.name}`, onclick: () => this.app.removePalette(p.id) },
+          icon('X', 14),
+        ),
+      );
+      this.paletteGrid.insertBefore(item, before);
+      this.customItems.push(item);
+    }
+    this.sync();
+  }
+
+  /** Window to make a palette: colors by hand, or taken from a dropped image. */
+  private buildPaletteDialog(): HTMLDialogElement {
+    const keys = ['bg', 'a', 'b', 'c'] as const;
+    const labels = { bg: 'Background', a: 'Primary', b: 'Secondary', c: 'Accent' };
+    const start = PALETTES[0];
+    const colors: Record<(typeof keys)[number], string> = { bg: start.bg, a: start.a, b: start.b, c: start.c };
+    const inputs = new Map<(typeof keys)[number], HTMLInputElement>();
+    const preview = h('div', { class: 'palette-preview' });
+    const hint = h('small', { class: 'hint' }, 'Drop an image here, or choose one, to take its colors.');
+    const nameInput = h('input', { type: 'text', maxLength: 24, placeholder: 'Name', 'aria-label': 'Palette name' });
+    const paint = (): void => {
+      preview.style.background = `linear-gradient(135deg, ${colors.bg} 0 25%, ${colors.b} 25% 50%, ${colors.a} 50% 75%, ${colors.c} 75%)`;
+      for (const k of keys) inputs.get(k)!.value = colors[k];
+    };
+    const fromFile = async (file: File | undefined): Promise<void> => {
+      if (!file || !file.type.startsWith('image/')) return void (hint.textContent = 'That is not an image.');
+      try {
+        const p = await paletteFromFile(file);
+        for (const k of keys) colors[k] = p[k];
+        hint.textContent = 'Colors taken from the image. Adjust them by hand if you like.';
+        paint();
+      } catch {
+        hint.textContent = 'The image cannot be loaded.';
+      }
+    };
+    const fileInput = h('input', {
+      type: 'file',
+      accept: 'image/*',
+      hidden: true,
+      onchange: (e: Event) => {
+        const input = e.target as HTMLInputElement;
+        void fromFile(input.files?.[0]);
+        input.value = '';
+      },
+    });
+    const drop = h('button', { type: 'button', class: 'palette-drop', onclick: () => fileInput.click() }, icon('ImagePlus', 22), hint);
+    drop.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      drop.classList.add('over');
+    });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => {
+      // Stay in this window: the page-wide drop would use the image as the overlay
+      e.preventDefault();
+      e.stopPropagation();
+      drop.classList.remove('over');
+      document.body.classList.remove('dragging');
+      void fromFile(e.dataTransfer?.files[0]);
+    });
+    const rows = keys.map((k) => {
+      const input = h('input', {
+        type: 'color',
+        'aria-label': labels[k],
+        oninput: (e: Event) => {
+          colors[k] = (e.target as HTMLInputElement).value;
+          paint();
+        },
+      });
+      inputs.set(k, input);
+      return h('label', { class: 'palette-color' }, input, h('span', {}, labels[k]));
+    });
+    const dialog = h(
+      'dialog',
+      { class: 'export-dialog palette-dialog', 'aria-labelledby': 'palette-title' },
+      h(
+        'header',
+        { class: 'modal-head' },
+        h('h1', { id: 'palette-title' }, 'New palette'),
+        h('button', { type: 'button', class: 'icon-btn close', title: 'Close (Esc)', 'aria-label': 'Close', onclick: () => dialog.close() }, icon('X', 20)),
+      ),
+      h(
+        'div',
+        { class: 'palette-form' },
+        drop,
+        fileInput,
+        preview,
+        h('div', { class: 'palette-colors' }, ...rows),
+        h('label', { class: 'text-input' }, nameInput),
+        h(
+          'div',
+          { class: 'overlay-row' },
+          h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, 'Cancel'),
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'btn',
+              onclick: () => {
+                this.app.addPalette(nameInput.value, { ...colors });
+                dialog.close();
+              },
+            },
+            icon('Plus'),
+            h('span', {}, 'Save palette'),
+          ),
+        ),
+      ),
+    );
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', () => {
+      nameInput.value = '';
+      hint.textContent = 'Drop an image here, or choose one, to take its colors.';
+    });
+    paint();
+    return dialog;
   }
 
   /** Show the palette taken from the user image first in the grid, or remove it (null). */
