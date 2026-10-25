@@ -16,6 +16,9 @@ function dark(id: string, name: string, primary: string): Palette {
   };
 }
 
+/** Palettes with one dominant color and shades of it (the autopilot only picks these) */
+export const isSingleColor = (p: Palette): boolean => !!p.dark;
+
 export const PALETTES: Palette[] = [
   dark('blood', 'Blood', '#ff1030'),
   dark('toxic', 'Toxic', '#39ff14'),
@@ -32,6 +35,14 @@ export const PALETTES: Palette[] = [
   { id: 'amber', name: 'Amber', bg: '#0a0500', a: '#ffb000', b: '#ff5e00', c: '#ffe2a0' },
   { id: 'ice', name: 'Ice', bg: '#000814', a: '#48cae4', b: '#0077b6', c: '#e0fbff' },
   { id: 'mono', name: 'Mono', bg: '#000000', a: '#ffffff', b: '#7a7a7a', c: '#ffffff' },
+  { id: 'sunset', name: 'Sunset', bg: '#0d0310', a: '#ff4e50', b: '#8a2be2', c: '#ffd23f' },
+  { id: 'vapor', name: 'Vaporwave', bg: '#08031a', a: '#ff71ce', b: '#01cdfe', c: '#b967ff' },
+  { id: 'cyber', name: 'Cyberpunk', bg: '#05060f', a: '#fcee0a', b: '#00f0ff', c: '#ff2a6d' },
+  { id: 'aurora', name: 'Aurora', bg: '#020a0c', a: '#2dffb2', b: '#7b5cff', c: '#d6fff0' },
+  { id: 'lava', name: 'Lava', bg: '#0a0200', a: '#ff3d00', b: '#ffb300', c: '#fff0c2' },
+  { id: 'deepsea', name: 'Deep sea', bg: '#00060d', a: '#00b4d8', b: '#2ee6a6', c: '#e0fff8' },
+  { id: 'candy', name: 'Candy', bg: '#0c0310', a: '#ff5fa2', b: '#5fe3ff', c: '#fff36b' },
+  { id: 'toxicwaste', name: 'Toxic waste', bg: '#030802', a: '#9dff00', b: '#a020f0', c: '#eaffb0' },
 ];
 
 /** '#rrggbb' -> [r, g, b] in 0..1 */

@@ -433,6 +433,10 @@ const actions: PanelActions = {
     settings.filterAmount = v;
     saveSettings(settings);
   },
+  setFilterPalette(on) {
+    settings.filterPalette = on;
+    changed();
+  },
   setFilterBeat(on) {
     settings.filterBeat = on;
     changed();

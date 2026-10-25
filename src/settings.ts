@@ -48,6 +48,8 @@ export interface Settings extends Effects {
   filterAmount: number;
   /** Filter gets stronger on each kick */
   filterBeat: boolean;
+  /** The filter's own colors (night vision green, tints) turn into palette colors */
+  filterPalette: boolean;
   /** Autopilot: switch modes and their settings by itself */
   auto: boolean;
   /** Kicks between autopilot jumps (autopilot.ts AUTO_EVERY) */
@@ -94,6 +96,7 @@ export const DEFAULTS: Settings = {
   filter: 0,
   filterAmount: 0.6,
   filterBeat: true,
+  filterPalette: false,
   auto: false,
   autoBeats: 1,
   autoMode: true,

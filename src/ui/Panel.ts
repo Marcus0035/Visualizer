@@ -1,6 +1,6 @@
 import type { Bands } from '../audio/analysis';
 import type { SourceKind } from '../audio/AudioEngine';
-import { PALETTES } from '../modes/palettes';
+import { PALETTES, isSingleColor } from '../modes/palettes';
 import type { Mode, Palette } from '../modes/types';
 import { AUTO_EVERY } from '../autopilot';
 import { IMAGE_PALETTE_ID, paletteFromFile } from '../overlay/imagePalette';
@@ -50,6 +50,7 @@ export interface PanelActions {
   setFilter(index: number): void;
   setFilterAmount(value: number): void;
   setFilterBeat(on: boolean): void;
+  setFilterPalette(on: boolean): void;
   setAuto(on: boolean): void;
   setAutoBeats(kicks: number): void;
   setAutoPart(key: AutoPart, on: boolean): void;
@@ -152,7 +153,9 @@ export class Panel {
   private readonly sourceBtns = new Map<SourceKind, HTMLButtonElement>();
   private readonly modeBtns = new Map<string, HTMLButtonElement>();
   private readonly paletteBtns = new Map<string, HTMLButtonElement>();
+  /** The user's palettes: the one from the image, own ones, and the new palette button */
   private readonly paletteGrid = h('div', { class: 'palette-grid' });
+  private newPaletteBtn!: HTMLButtonElement;
   private readonly customItems: HTMLElement[] = [];
   private readonly variantBox = h('div', { class: 'chips' });
   private readonly sourceExtra = h('div', { class: 'source-extra' });
@@ -164,6 +167,7 @@ export class Panel {
   private readonly removeImageBtn: HTMLButtonElement;
   private readonly filterBtns: HTMLButtonElement[] = [];
   private filterBeatSet: (on: boolean) => void = () => {};
+  private filterPaletteSet: (on: boolean) => void = () => {};
   private readonly autoBtn: HTMLButtonElement;
   private readonly autoSetters = new Map<AutoPart | 'auto', (on: boolean) => void>();
   private readonly autoBeatsBtns = new Map<number, HTMLButtonElement>();
@@ -346,17 +350,24 @@ export class Panel {
     });
 
     // Look
-    const palettes = this.paletteGrid;
-    for (const p of PALETTES) palettes.append(this.paletteButton(p));
     const paletteDialog = this.buildPaletteDialog();
-    palettes.append(
-      h(
-        'button',
-        { type: 'button', class: 'palette-btn palette-new', onclick: () => paletteDialog.showModal() },
-        icon('Plus', 18),
-        h('span', {}, 'New palette'),
-      ),
+    this.newPaletteBtn = h(
+      'button',
+      { type: 'button', class: 'palette-btn palette-new', onclick: () => paletteDialog.showModal() },
+      icon('Plus', 18),
+      h('span', {}, 'New palette'),
     );
+    this.paletteGrid.append(this.newPaletteBtn);
+    const grid = (single: boolean) =>
+      h('div', { class: 'palette-grid' }, ...PALETTES.filter((p) => isSingleColor(p) === single).map((p) => this.paletteButton(p)));
+    const palettes = [
+      h('h3', {}, 'User'),
+      this.paletteGrid,
+      h('h3', {}, 'One color and its shades'),
+      grid(true),
+      h('h3', {}, 'Several colors'),
+      grid(false),
+    ];
     const fx = h('div', { class: 'switches' });
     const fxDefs: [keyof Effects, string, string?][] = [
       ['sections', 'Calm intro and breaks', 'With a loaded track, effects rest in the quiet parts'],
@@ -430,6 +441,8 @@ export class Panel {
     });
     const filterBeat = toggle('Stronger on kick', s.filterBeat, (on) => app.setFilterBeat(on), 'The filter gets stronger on every kick');
     this.filterBeatSet = filterBeat.set;
+    const filterPalette = toggle('Palette colors', s.filterPalette, (on) => app.setFilterPalette(on), 'The filter uses the colors of the palette instead of its own');
+    this.filterPaletteSet = filterPalette.set;
 
     // Autopilot
     const autoOn = toggle('Autopilot', s.auto, (on) => app.setAuto(on), 'Switches modes and their settings by itself, on the kick');
@@ -474,13 +487,14 @@ export class Panel {
         ),
       ],
       mode: [card('Mode', modes, h('h3', {}, 'Variant'), this.variantBox), this.paramsCard],
-      look: [h('section', { class: 'card wide' }, h('h2', {}, 'Palette'), palettes, paletteDialog), card('Effects', fx)],
+      look: [h('section', { class: 'card wide' }, h('h2', {}, 'Palette'), ...palettes, paletteDialog), card('Effects', fx)],
       filters: [
         h('section', { class: 'card wide' }, h('h2', {}, 'Full-screen filter'), filters),
         card(
           'Filter settings',
           slider('Strength', 0, 1, 0.01, s.filterAmount, (v) => app.setFilterAmount(v)),
           filterBeat.row,
+          filterPalette.row,
           h('small', { class: 'hint' }, 'The filter runs over any mode, image and text.'),
         ),
       ],
@@ -709,7 +723,6 @@ export class Panel {
   setCustomPalettes(list: readonly Palette[]): void {
     for (const item of this.customItems.splice(0)) item.remove();
     for (const p of list) this.paletteBtns.delete(p.id);
-    const before = this.paletteBtns.get(PALETTES[0].id) ?? null;
     for (const p of list) {
       const item = h(
         'div',
@@ -721,7 +734,7 @@ export class Panel {
           icon('X', 14),
         ),
       );
-      this.paletteGrid.insertBefore(item, before);
+      this.paletteGrid.insertBefore(item, this.newPaletteBtn);
       this.customItems.push(item);
     }
     this.sync();
@@ -857,6 +870,7 @@ export class Panel {
     this.removeImageBtn.hidden = !this.app.hasImage();
     this.filterBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.filter)));
     this.filterBeatSet(s.filterBeat);
+    this.filterPaletteSet(s.filterPalette);
     this.autoBtn.setAttribute('aria-pressed', String(s.auto));
     this.backBtn.disabled = !this.app.canGoBack();
     for (const [k, set] of this.autoSetters) set(s[k]);
