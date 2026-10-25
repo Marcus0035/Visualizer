@@ -1,4 +1,4 @@
-import { BeatDetector, type Bands, computeBands, envelope, normalizeDb, rms } from './analysis';
+import { BeatDetector, TempoTracker, spectralFlux, KICK_RANGE, bandEnergy, type Bands, computeBands, envelope, normalizeDb, rms } from './analysis';
 import { renderDemoLoop } from './demo';
 
 export type SourceKind = 'demo' | 'input' | 'file' | 'tab';
@@ -45,6 +45,8 @@ export class AudioEngine {
   private readonly left = this.ctx.createAnalyser();
   private readonly right = this.ctx.createAnalyser();
   private readonly beats = new BeatDetector();
+  private readonly tempo = new TempoTracker();
+  private readonly prevSpec = new Float32Array(FFT_SIZE / 2);
   private readonly dbBuf = new Float32Array(FFT_SIZE / 2);
 
   private source: AudioNode | null = null;
@@ -61,7 +63,7 @@ export class AudioEngine {
   constructor() {
     for (const a of [this.mono, this.left, this.right]) {
       a.fftSize = FFT_SIZE;
-      a.smoothingTimeConstant = 0.6;
+      a.smoothingTimeConstant = 0.3;
       a.minDecibels = MIN_DB;
       a.maxDecibels = MAX_DB;
     }
@@ -248,7 +250,9 @@ export class AudioEngine {
     f.bands.treble = envelope(f.bands.treble, raw.treble, dt);
     f.level = envelope(f.level, Math.min(1, rms(f.wave) * 2.5), dt);
 
-    f.beat = this.beats.update(raw.bass, nowMs);
+    const onset = this.beats.update(bandEnergy(f.spectrum, f.sampleRate, ...KICK_RANGE), nowMs);
+    const gridBeat = this.tempo.update(spectralFlux(f.spectrum, this.prevSpec, f.sampleRate), nowMs / 1000);
+    f.beat = this.tempo.confident ? gridBeat : onset;
     f.pulse = f.beat ? 1 : f.pulse * Math.exp(-dt * 6);
     return f;
   }
@@ -264,6 +268,8 @@ export class AudioEngine {
     this.stream = extra.stream ?? null;
     this.media = extra.media ?? null;
     this.beats.reset();
+    this.tempo.reset();
+    this.prevSpec.fill(0);
 
     // Stopped sharing or unplugged device: drop the dead source
     const stream = this.stream;

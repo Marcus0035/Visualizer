@@ -106,3 +106,27 @@ describe('BeatDetector', () => {
     expect(d.update(1, 300)).toBe(false);
   });
 });
+
+describe('TempoTracker', () => {
+  it('locks onto the beat grid of a steady 140 bpm pattern', async () => {
+    const { TempoTracker } = await import('../src/audio/analysis');
+    const tr = new TempoTracker();
+    const period = 60 / 140;
+    const beats: number[] = [];
+    for (let t = 0; t < 30; t += 1 / 60) {
+      const sinceKick = t % period;
+      const sinceHat = (t + period / 2) % period;
+      const onset = (sinceKick < 0.05 ? 1 : 0) + (sinceHat < 0.03 ? 0.4 : 0);
+      if (tr.update(onset, t)) beats.push(t);
+    }
+    expect(tr.confident).toBe(true);
+    expect(60 / tr.period).toBeGreaterThan(136);
+    expect(60 / tr.period).toBeLessThan(144);
+    const late = beats.filter((t) => t > 15);
+    expect(late.length).toBeGreaterThan(25);
+    for (const t of late) {
+      const off = t % period;
+      expect(Math.min(off, period - off)).toBeLessThan(0.07);
+    }
+  });
+});
