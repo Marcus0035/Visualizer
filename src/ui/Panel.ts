@@ -494,7 +494,7 @@ export class Panel {
           h(
             'dl',
             { class: 'keys' },
-            ...[[`1 - ${app.modes.length}`, 'mode'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
+            ...[[app.modes.length >= 10 ? '1 - 9, 0' : `1 - ${app.modes.length}`, 'mode'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
           ),
         ),
       ],

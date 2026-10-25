@@ -34,6 +34,7 @@ import {
   Shuffle,
   Dices,
   Undo2,
+  LayoutGrid,
   Download,
   Smartphone,
   Square,
@@ -45,6 +46,7 @@ import {
 } from 'lucide';
 
 const ICONS: Record<string, IconNode> = {
+  LayoutGrid,
   Download,
   Smartphone,
   Square,

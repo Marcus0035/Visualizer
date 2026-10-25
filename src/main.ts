@@ -492,8 +492,9 @@ window.addEventListener('keydown', (e) => {
   // Physical digit keys, so the Czech layout (+ e s c r) works without Shift
   const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
   if (digit) {
-    const n = Number(digit[1]);
-    if (n >= 1 && n <= MODES.length) actions.setMode(MODES[n - 1].id);
+    // 1..9, then 0 for the tenth mode
+    const i = (Number(digit[1]) + 9) % 10;
+    if (i < MODES.length) actions.setMode(MODES[i].id);
     return;
   }
 
