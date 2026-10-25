@@ -34,11 +34,17 @@ import {
   Shuffle,
   Dices,
   Undo2,
+  Droplets,
+  Tv,
+  Gamepad2,
   createElement,
   type IconNode,
 } from 'lucide';
 
 const ICONS: Record<string, IconNode> = {
+  Droplets,
+  Tv,
+  Gamepad2,
   Activity,
   Binary,
   ChartColumn,
