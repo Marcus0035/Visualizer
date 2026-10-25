@@ -6,7 +6,7 @@ export const arcade: ModeGL = {
   id: 'arcade',
   name: '8-bit',
   icon: 'Gamepad2',
-  variants: ['Stars', 'Grid', 'Invaders'],
+  variants: ['Stars', 'Invaders'],
   params: [
     { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3, step: 0.05 },
     { id: 'uPixel', label: 'Pixel size', default: 6, min: 2, max: 16, step: 1 },
@@ -34,28 +34,6 @@ vec3 stars(vec2 p) {
     float star = step(0.8, h2(cell + fl * 31.0));
     float near = z * z;
     col += star * mix(uB, uC, near) * (0.3 + near * 2.5) * step(length(fract(q) - 0.5), 0.12 + 0.2 * near);
-  }
-  return col;
-}
-
-// Outrun grid to the horizon under a striped sun
-vec3 grid(vec2 p, float px) {
-  vec3 col = uBg;
-  if (p.y > -0.05) {
-    vec2 s = p - vec2(0.0, 0.12);
-    float sun = step(length(s), 0.22 + 0.02 * uBass);
-    float stripes = step(0.35, fract(s.y * 18.0 - uTime * 0.5)) + step(0.06, s.y);
-    col = mix(col, mix(uA, uC, smoothstep(-0.2, 0.2, s.y)), sun * min(stripes, 1.0));
-    col += uB * 0.15 * (1.0 - smoothstep(0.0, 0.5, p.y));
-  } else {
-    float depth = 0.25 / (-p.y);
-    vec2 g = vec2(p.x * depth * 6.0, depth * 1.5 + uPhase * 0.8);
-    // Distance to the nearest grid line in screen pixel blocks, so lines stay thin near the camera
-    // (analytic size of one block in grid units: fwidth is zero inside a snapped block)
-    vec2 block = vec2(depth * 6.0, depth * depth * 6.0) * px / uRes.y;
-    vec2 f = abs(fract(g + 0.5) - 0.5) / block;
-    float line = 1.0 - smoothstep(0.5, 1.5, min(f.x, f.y));
-    col += uA * line * (0.4 + 0.6 * uPulse) * clamp(1.0 / depth, 0.0, 1.0) * 1.5;
   }
   return col;
 }
@@ -100,7 +78,7 @@ void main() {
   float px = uPixel * max(1.0, uRes.y / 720.0);
   vec2 frag = (floor(gl_FragCoord.xy / px) + 0.5) * px;
   vec2 p = (frag - 0.5 * uRes) / uRes.y;
-  vec3 col = uVariant == 0 ? stars(p) : uVariant == 1 ? grid(p, px) : invaders((gl_FragCoord.xy - 0.5 * uRes) / uRes.y);
+  vec3 col = uVariant == 0 ? stars(p) : invaders((gl_FragCoord.xy - 0.5 * uRes) / uRes.y);
   col += uC * uPulse * uPulse * uPulse * uFlash * 0.25;
   outColor = vec4(clamp(crush(col), 0.0, 1.0), 1.0);
 }
