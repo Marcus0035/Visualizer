@@ -283,7 +283,7 @@ const NOTHING: AutoParts = {
   autoPalette: false,
   autoFilter: false,
   autoImage: false,
-  autoInvert: false,
+  autoFlip: false,
   autoSkip: [],
 };
 
