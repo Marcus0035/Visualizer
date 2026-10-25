@@ -110,7 +110,7 @@ export const DEFAULTS: Settings = {
   autoPalette: false,
   autoFilter: false,
   autoImage: false,
-  autoInvert: false,
+  autoInvert: true,
   autoSkip: [],
 };
 
