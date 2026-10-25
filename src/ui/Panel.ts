@@ -51,6 +51,7 @@ export interface PanelActions {
   setFilterAmount(value: number): void;
   setFilterBeat(on: boolean): void;
   setFilterPalette(on: boolean): void;
+  setInvert(on: boolean): void;
   setAuto(on: boolean): void;
   setAutoBeats(kicks: number): void;
   setAutoPart(key: AutoPart, on: boolean): void;
@@ -168,6 +169,7 @@ export class Panel {
   private readonly filterBtns: HTMLButtonElement[] = [];
   private filterBeatSet: (on: boolean) => void = () => {};
   private filterPaletteSet: (on: boolean) => void = () => {};
+  private invertSet: (on: boolean) => void = () => {};
   private readonly autoBtn: HTMLButtonElement;
   private readonly autoSetters = new Map<AutoPart | 'auto', (on: boolean) => void>();
   private readonly autoBeatsBtns = new Map<number, HTMLButtonElement>();
@@ -443,6 +445,8 @@ export class Panel {
     this.filterBeatSet = filterBeat.set;
     const filterPalette = toggle('Palette colors', s.filterPalette, (on) => app.setFilterPalette(on), 'The filter uses the colors of the palette instead of its own');
     this.filterPaletteSet = filterPalette.set;
+    const invert = toggle('Invert colors', s.invert, (on) => app.setInvert(on), 'Black turns white, every color turns into its opposite');
+    this.invertSet = invert.set;
 
     // Autopilot
     const autoOn = toggle('Autopilot', s.auto, (on) => app.setAuto(on), 'Switches modes and their settings by itself, on the kick');
@@ -495,6 +499,7 @@ export class Panel {
           slider('Strength', 0, 1, 0.01, s.filterAmount, (v) => app.setFilterAmount(v)),
           filterBeat.row,
           filterPalette.row,
+          invert.row,
           h('small', { class: 'hint' }, 'The filter runs over any mode, image and text.'),
         ),
       ],
@@ -871,6 +876,7 @@ export class Panel {
     this.filterBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === s.filter)));
     this.filterBeatSet(s.filterBeat);
     this.filterPaletteSet(s.filterPalette);
+    this.invertSet(s.invert);
     this.autoBtn.setAttribute('aria-pressed', String(s.auto));
     this.backBtn.disabled = !this.app.canGoBack();
     for (const [k, set] of this.autoSetters) set(s[k]);

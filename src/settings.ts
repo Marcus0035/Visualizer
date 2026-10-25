@@ -50,6 +50,8 @@ export interface Settings extends Effects {
   filterBeat: boolean;
   /** The filter's own colors (night vision green, tints) turn into palette colors */
   filterPalette: boolean;
+  /** Colors flipped: black becomes white and so on */
+  invert: boolean;
   /** Autopilot: switch modes and their settings by itself */
   auto: boolean;
   /** Kicks between autopilot jumps (autopilot.ts AUTO_EVERY) */
@@ -97,6 +99,7 @@ export const DEFAULTS: Settings = {
   filterAmount: 0.6,
   filterBeat: true,
   filterPalette: false,
+  invert: false,
   auto: false,
   autoBeats: 1,
   autoMode: true,

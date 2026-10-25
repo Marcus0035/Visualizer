@@ -363,6 +363,7 @@ export class Renderer {
     gl.uniform3fv(p.loc('uB'), hexToRgb(palette.b));
     gl.uniform3fv(p.loc('uC'), hexToRgb(palette.c));
     gl.uniform1f(p.loc('uFilterPal'), fx.filterPalette ? 1 : 0);
+    gl.uniform1f(p.loc('uInvert'), fx.invert ? 1 : 0);
     gl.uniform1f(p.loc('uStrict'), fx.strictPalette ? 1 : 0);
     gl.uniform1f(p.loc('uCrt'), fx.crt ? 1 : 0);
     gl.uniform1f(p.loc('uGrain'), fx.grain ? 1 : 0);

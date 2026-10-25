@@ -55,6 +55,7 @@ uniform vec3 uA;
 uniform vec3 uB;
 uniform vec3 uC;
 uniform float uFilterPal; // map the filtered picture onto the palette colors
+uniform float uInvert;    // flip the colors of the picture
 uniform float uStrict;  // map the final picture onto the palette colors only
 uniform sampler2D uImage;
 uniform float uHasImage;
@@ -395,6 +396,7 @@ void main() {
   vec3 col = uFilter == 7 ? halftone(split) : scene(uv, split);
   col = filterColor(col, screenUv);
   if (uFilterPal > 0.5 && uFilter != 0) col = paletteOnly(col);
+  if (uInvert > 0.5) col = 1.0 - clamp(col, 0.0, 1.0);
 
   if (uCrt > 0.5) {
     col *= 0.82 + 0.18 * sin(gl_FragCoord.y * 3.14159 * 0.5);

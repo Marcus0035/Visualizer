@@ -433,6 +433,10 @@ const actions: PanelActions = {
     settings.filterAmount = v;
     saveSettings(settings);
   },
+  setInvert(on) {
+    settings.invert = on;
+    changed();
+  },
   setFilterPalette(on) {
     settings.filterPalette = on;
     changed();
