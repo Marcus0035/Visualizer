@@ -1,7 +1,7 @@
 import type { ModeGL } from './types';
 
 /**
- * Motifs built from the user image: its colors and shapes drive cells, contour lines,
+ * Motifs built from the user image: its colors and shapes drive contour lines,
  * a kaleidoscope and dots, without showing the picture itself. Without an image a
  * noise field in palette colors stands in for it.
  */
@@ -10,7 +10,7 @@ export const motif: ModeGL = {
   id: 'motif',
   name: 'Image motif',
   icon: 'Sparkles',
-  variants: ['Stained glass', 'Contours', 'Kaleidoscope', 'Dots'],
+  variants: ['Contours', 'Kaleidoscope', 'Dots'],
   usesImage: true,
   params: [
     { id: 'uSpeed', label: 'Speed', default: 1, min: 0.25, max: 3, step: 0.05 },
@@ -70,28 +70,6 @@ vec3 tone(vec3 c) {
 
 float beatFlash() { return uPulse * uPulse * uFlash * 2.0; }
 
-// Stained glass: cells take the color of the image under their seed, lead lines glow on the bass
-vec3 glass(vec2 p) {
-  float n = 7.0 * uDensity;
-  vec2 g = p * n;
-  vec2 cell = floor(g);
-  float d1 = 9.0, d2 = 9.0;
-  vec2 seedCell = cell, seedPos = vec2(0.0);
-  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-    vec2 c = cell + vec2(x, y);
-    vec2 o = 0.5 + 0.4 * sin(uPhase * 0.6 + 6.2831 * h22(c));
-    float d = length(c + o - g);
-    if (d < d1) { d2 = d1; d1 = d; seedCell = c; seedPos = c + o; }
-    else if (d < d2) d2 = d;
-  }
-  vec3 col = tone(source(seedPos / n, 2.0));
-  float k = floor(uKick);
-  float lit = step(0.82, h2(seedCell + k * 0.137));
-  col *= 0.55 + 0.45 * (1.0 - d1) + lit * beatFlash();
-  float edge = 1.0 - smoothstep(0.02, 0.06 + 0.04 * uBass, d2 - d1);
-  return mix(col, uBg * 0.5 + uA * uBass * 0.6, edge);
-}
-
 // Contour lines over the blurred image brightness, flowing outward with the music
 vec3 contours(vec2 p) {
   float hgt = luma(source(p, 4.5)) + 0.15 * fbm(p * 3.0 + uTime * 0.1);
@@ -143,7 +121,7 @@ vec3 dots(vec2 p) {
 
 void main() {
   vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
-  vec3 col = uVariant == 0 ? glass(p) : uVariant == 1 ? contours(p) : uVariant == 2 ? kaleido(p) : dots(p);
+  vec3 col = uVariant == 0 ? contours(p) : uVariant == 1 ? kaleido(p) : dots(p);
   outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
 `,
