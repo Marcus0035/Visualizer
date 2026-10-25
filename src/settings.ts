@@ -36,6 +36,8 @@ export interface Settings extends Effects {
   imageOpacity: number;
   /** Glow around the image, 0..1 */
   imageGlow: number;
+  /** Soft edges fading into the background, 0..1 */
+  imageFade: number;
   /** Overlay (image and text) size, 0.2..1 */
   overlaySize: number;
   text: string;
@@ -83,6 +85,7 @@ export const DEFAULTS: Settings = {
   imagePos: 0,
   imageOpacity: 1,
   imageGlow: 0,
+  imageFade: 0.2,
   overlaySize: 0.7,
   text: '',
   font: 'anton',

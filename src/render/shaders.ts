@@ -67,6 +67,7 @@ uniform vec2 uImageCrop;  // texture span of the shown part (center crop for sha
 uniform float uImageAngle;
 uniform float uImageOpacity;
 uniform float uImageGlow;
+uniform float uImageFade;  // 0 sharp edges .. 1 fades out from the middle
 uniform sampler2D uText;
 uniform float uHasText;
 uniform vec4 uTextRect;
@@ -142,11 +143,12 @@ vec4 imageLayer(vec2 uv) {
   vec4 s = textureLod(uImage, clamp(tex, 0.0, 1.0), uImageLod);
   float mask;
   if (uImageShape == 0) {
-    // Photos fade out towards the edges (per axis, so the corners stay round instead of creased)
-    vec2 fx = smoothstep(0.0, 0.12, t) * smoothstep(0.0, 0.12, 1.0 - t);
-    mask = inside(t) ? (uImageAlpha > 0.5 ? s.a : fx.x * fx.y) : 0.0;
+    // Fade out towards the edges (per axis, so the corners stay round instead of creased)
+    float w = 0.005 + 0.5 * uImageFade;
+    vec2 fx = smoothstep(0.0, w, t) * smoothstep(0.0, w, 1.0 - t);
+    mask = inside(t) ? (uImageAlpha > 0.5 ? s.a : 1.0) * fx.x * fx.y : 0.0;
   } else {
-    mask = smoothstep(0.015, -0.015, dist) * (uImageAlpha > 0.5 ? s.a : 1.0);
+    mask = smoothstep(0.015, -0.015 - 0.9 * uImageFade, dist) * (uImageAlpha > 0.5 ? s.a : 1.0);
   }
   float boost = 0.85 + 0.35 * uPulse;
 

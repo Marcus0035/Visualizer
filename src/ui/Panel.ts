@@ -40,7 +40,7 @@ export interface PanelActions {
   /** A loaded track that can be turned into a video in the background */
   canExportInBackground(): boolean;
   setImageChoice(key: ImageChoice, index: number): void;
-  setImageAmount(key: 'imageOpacity' | 'imageGlow', value: number): void;
+  setImageAmount(key: 'imageOpacity' | 'imageGlow' | 'imageFade', value: number): void;
   setOverlaySize(value: number): void;
   setText(text: string): void;
   setFont(id: string): void;
@@ -481,6 +481,7 @@ export class Panel {
           ...imageChoices,
           slider('Viditelnost', 0.1, 1, 0.01, s.imageOpacity, (v) => app.setImageAmount('imageOpacity', v)),
           slider('Záře kolem', 0, 1, 0.01, s.imageGlow, (v) => app.setImageAmount('imageGlow', v)),
+          slider('Rozmazání do ztracena', 0, 1, 0.01, s.imageFade, (v) => app.setImageAmount('imageFade', v)),
           h('small', { class: 'hint' }, 'Obrázek jde i přetáhnout do okna.'),
         ),
         card('Text', textInput, h('h3', {}, 'Písmo'), fonts),

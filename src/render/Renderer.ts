@@ -374,6 +374,7 @@ export class Renderer {
     gl.uniform1f(p.loc('uImageAngle'), rects.angle);
     gl.uniform1f(p.loc('uImageOpacity'), fx.imageOpacity);
     gl.uniform1f(p.loc('uImageGlow'), fx.imageGlow);
+    gl.uniform1f(p.loc('uImageFade'), fx.imageFade);
     gl.uniform4fv(p.loc('uImageRect'), rects.image);
     gl.uniform2f(p.loc('uImageTexel'), 1 / this.image.width, 1 / this.image.height);
     gl.uniform1f(p.loc('uImageLod'), this.lod(fx.imageShape > 0 ? side : this.image.width, rects.image));
