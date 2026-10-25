@@ -65,7 +65,7 @@ export interface PanelActions {
 /** What a single random button re-rolls */
 export type RandomPart = 'mode' | 'settings' | 'color' | 'filter';
 
-export type AutoPart = 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoImage' | 'autoFlip';
+export type AutoPart = 'autoMode' | 'autoVariant' | 'autoParams' | 'autoPalette' | 'autoFilter' | 'autoImage';
 
 const TABS = [
   { id: 'sound', label: 'Sound', icon: 'AudioLines' },
@@ -462,10 +462,9 @@ export class Panel {
       ['autoMode', 'Mode', 'Switches between the selected modes'],
       ['autoVariant', 'Variant', 'E.g. tunnel, lasers, blocks'],
       ['autoParams', 'Mode settings', 'Speed, density, flash, brightness'],
-      ['autoPalette', 'Colors', 'Only dark single-color palettes'],
+      ['autoPalette', 'Change colors', 'Palette and black/white flips. Off: your colors stay as they are'],
       ['autoFilter', 'Filter', 'Sometimes a full-screen filter, sometimes a clean picture'],
       ['autoImage', 'Image motion', 'Changes how the image moves on the beat'],
-      ['autoFlip', 'Invert colors', 'Sometimes flips black and white'],
     ];
     for (const [key, label, hint] of partDefs) {
       const t = toggle(label, s[key], (on) => app.setAutoPart(key, on), hint);
