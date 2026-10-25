@@ -8,6 +8,7 @@ import type { Mode, Palette } from './modes/types';
 import { type OverlayImage, forgetImage, loadImageFile, restoreImage } from './overlay/image';
 import { IMAGE_PALETTE_ID, paletteFromCanvas } from './overlay/imagePalette';
 import { FONTS, renderText } from './overlay/text';
+import { type BeatGrid, analyzeBeats } from './audio/beatgrid';
 import { SongStructure } from './audio/structure';
 import type { AudioFrame } from './audio/AudioEngine';
 import { offlineSupported, renderOffline } from './export/offline';
@@ -83,7 +84,7 @@ function sceneOf(s: Settings): Scene {
 }
 
 /** Decoded loaded track and its parts (intro, breaks...); null for other sources */
-let track: { buffer: AudioBuffer; structure: SongStructure } | null = null;
+let track: { buffer: AudioBuffer; structure: SongStructure; grid: BeatGrid | null } | null = null;
 let trackJob = 0;
 
 /** Play a file and analyse its structure in the background. */
@@ -94,7 +95,8 @@ async function useTrack(file: File): Promise<void> {
   try {
     const buffer = await audio.ctx.decodeAudioData(await file.arrayBuffer());
     if (job !== trackJob) return;
-    track = { buffer, structure: SongStructure.analyze(buffer) };
+    track = { buffer, structure: SongStructure.analyze(buffer), grid: analyzeBeats(buffer) };
+    timeline.refresh();
     const calm = track.structure.sections.filter((s) => s.kind !== 'drive').length;
     if (calm) panel.setStatus(`Track analysed: ${calm} quiet ${calm === 1 ? 'part' : 'parts'} (intro, breaks, outro).`);
   } catch {
@@ -493,6 +495,13 @@ const timeline = new Timeline({
   playing: () => audio.playing,
   togglePlay: () => audio.togglePlay(),
   seek: (t) => audio.seek(t),
+  grid: () => track?.grid ?? null,
+  snap: () => settings.timelineSnap,
+  setSnap(mode) {
+    settings.timelineSnap = mode;
+    saveSettings(settings);
+    timeline.refresh();
+  },
   modes: MODES,
   filters: FILTERS,
   palettes: allPalettes,

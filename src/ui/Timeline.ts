@@ -1,5 +1,6 @@
 // Timeline editor: drag modes, filters and colors from the library onto tracks. While a clip
 // covers the playhead the autopilot leaves that thing alone and the clip's value is shown.
+import { type BeatGrid, firstBar, snapTime } from '../audio/beatgrid';
 import type { Mode, Palette } from '../modes/types';
 import { type Clip, MIN_CLIP, TRACKS, type TrackId, describeValue, freeRange, placeClip, trackClips } from '../timeline';
 import { h, icon } from './dom';
@@ -16,11 +17,17 @@ export interface TimelineApp {
   modes: Mode[];
   filters: { name: string }[];
   palettes(): Palette[];
+  /** Beats and bars of the loaded track, null until analysed (or when there is no clear beat) */
+  grid(): BeatGrid | null;
+  snap(): 'off' | 'beat' | 'bar';
+  setSnap(mode: 'off' | 'beat' | 'bar'): void;
 }
 
 const DEFAULT_LENGTH = 8;
 const TRACK_H = 38;
-const RULER_H = 26;
+const RULER_H = 38;
+/** A clip edge within this many pixels of a grid line jumps onto it */
+const SNAP_PX = 14;
 
 interface Item {
   track: TrackId;
@@ -35,6 +42,8 @@ export class Timeline {
   private readonly timeLabel = h('span', { class: 'tl-time' }, '0:00');
   private readonly playBtn = h('button', { type: 'button', class: 'icon-btn', title: 'Play / pause (Space)' });
   private readonly inspect = h('div', { class: 'tl-inspect' });
+  private readonly tempo = h('span', { class: 'tl-tempo' });
+  private readonly snapBox = h('div', { class: 'tl-snap', title: 'Magnet: clip edges jump onto the beats or the bar lines' });
   private readonly zoom = h('input', { type: 'range', min: '4', max: '80', step: '1', 'aria-label': 'Zoom' }) as HTMLInputElement;
   private playhead = h('div', { class: 'tl-playhead' });
   private scroller: HTMLElement | null = null;
@@ -60,6 +69,8 @@ export class Timeline {
         h('strong', {}, 'Timeline'),
         this.playBtn,
         this.timeLabel,
+        this.tempo,
+        this.snapBox,
         this.inspect,
         h('label', { class: 'tl-zoom', title: 'Zoom' }, icon('ScanEye', 14), this.zoom),
         h('button', { type: 'button', class: 'icon-btn close', title: 'Close (T)', 'aria-label': 'Close the timeline', onclick: () => this.hide() }, icon('X', 18)),
@@ -123,6 +134,18 @@ export class Timeline {
     }
   }
 
+  private renderSnap(): void {
+    const g = this.app.grid();
+    this.tempo.textContent = g ? `${Math.round(g.bpm)} BPM` : '';
+    this.snapBox.hidden = !g;
+    this.snapBox.replaceChildren(
+      h('span', {}, 'Snap'),
+      ...(['off', 'beat', 'bar'] as const).map((m) =>
+        h('button', { type: 'button', class: 'chip', 'aria-pressed': String(this.app.snap() === m), onclick: () => this.app.setSnap(m) }, m === 'off' ? 'Off' : m === 'beat' ? 'Beat' : 'Bar'),
+      ),
+    );
+  }
+
   private items(track: TrackId): Item[] {
     if (track === 'mode') return this.app.modes.map((m) => ({ track, value: `${m.id}:0`, label: m.name }));
     if (track === 'filter') return this.app.filters.map((f, i) => ({ track, value: String(i), label: f.name })).slice(1);
@@ -141,9 +164,20 @@ export class Timeline {
     return 'Invert';
   }
 
+  /** Pull `t` onto the nearest grid line when the magnet is on and one is close (always, with `force`). */
+  private snapped(t: number, force = false): number {
+    const g = this.app.grid();
+    const mode = this.app.snap();
+    if (!g || mode === 'off' || !this.pps) return t;
+    const s = snapTime(g, t, mode);
+    return force || Math.abs(s - t) * this.pps <= SNAP_PX ? s : t;
+  }
+
   private add(track: TrackId, value: string, at: number): void {
     const clips = this.app.clips();
-    const spot = placeClip(clips, track, at, DEFAULT_LENGTH, this.app.duration());
+    const g = this.app.grid();
+    const length = g ? g.period * g.beatsPerBar * 4 : DEFAULT_LENGTH;
+    const spot = placeClip(clips, track, this.snapped(at, true), length, this.app.duration());
     if (!spot) return;
     const clip: Clip = { id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, track, value, ...spot };
     this.selected = clip.id;
@@ -159,6 +193,7 @@ export class Timeline {
     const duration = this.app.duration();
     this.builtFor = duration;
     this.library = this.buildLibrary();
+    this.renderSnap();
     if (duration <= 0) {
       this.scroller = null;
       this.body.replaceChildren(h('p', { class: 'tl-empty' }, 'Load a music file to edit its timeline: Settings > Sound > Choose file, or drop it onto the window.'));
@@ -178,6 +213,20 @@ export class Timeline {
     const ruler = h('div', { class: 'tl-ruler', style: { height: `${RULER_H}px` } });
     const step = pps >= 40 ? 1 : pps >= 18 ? 5 : pps >= 8 ? 10 : 30;
     for (let s = 0; s <= duration; s += step) ruler.append(h('span', { style: { left: `${s * pps}px` } }, fmt(s)));
+    const grid = this.app.grid();
+    if (grid) {
+      const barPx = grid.period * grid.beatsPerBar * pps;
+      const beatPx = grid.period * pps;
+      const line = (px: number, at: number, alpha: number): string =>
+        `linear-gradient(90deg, rgba(255,255,255,${alpha}) 0 1px, transparent 1px) ${at * pps}px 0 / ${px}px 100% repeat-x`;
+      inner.style.backgroundImage = [line(barPx, firstBar(grid), 0.16), beatPx >= 7 ? line(beatPx, grid.offset, 0.06) : ''].filter(Boolean).join(',');
+      inner.style.backgroundRepeat = 'repeat-x';
+      // Bar numbers; only every few bars when they would crowd
+      const every = barPx >= 34 ? 1 : barPx >= 17 ? 2 : barPx >= 8 ? 4 : 8;
+      for (let k = 0, t = firstBar(grid), bar = 1; t < duration; k++, t = firstBar(grid) + k * grid.period * grid.beatsPerBar, bar++) {
+        if (t >= 0 && (bar - 1) % every === 0) ruler.append(h('span', { class: 'bar', style: { left: `${t * pps}px` } }, String(bar)));
+      }
+    }
     const scrub = (e: PointerEvent): void => {
       const rect = inner.getBoundingClientRect();
       this.app.seek(Math.max(0, Math.min(duration, (e.clientX - rect.left) / pps)));
@@ -302,12 +351,17 @@ export class Timeline {
         const dt = (ev.clientX - x0) / pps;
         if (mode === 'move') {
           const len = c.end - c.start;
-          start = Math.min(Math.max(c.start + dt, room.min), max - len);
+          let want = c.start + dt;
+          // Magnet: whichever edge is closer to a grid line jumps onto it
+          const sStart = this.snapped(want);
+          const sEnd = this.snapped(want + len) - len;
+          want = sStart !== want ? sStart : sEnd;
+          start = Math.min(Math.max(want, room.min), max - len);
           end = start + len;
         } else if (mode === 'l') {
-          start = Math.min(Math.max(c.start + dt, room.min), c.end - MIN_CLIP);
+          start = Math.min(Math.max(this.snapped(c.start + dt), room.min), c.end - MIN_CLIP);
         } else {
-          end = Math.max(Math.min(c.end + dt, max), c.start + MIN_CLIP);
+          end = Math.max(Math.min(this.snapped(c.end + dt), max), c.start + MIN_CLIP);
         }
         el.style.left = `${start * pps}px`;
         el.style.width = `${(end - start) * pps}px`;

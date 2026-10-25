@@ -69,6 +69,8 @@ export interface Settings extends Effects {
   autoSkip: string[];
   /** Clips of the timeline editor */
   timeline: Clip[];
+  /** Timeline magnet: off, beats or bars */
+  timelineSnap: 'off' | 'beat' | 'bar';
 }
 
 const KEY = 'visualizer.settings.v1';
@@ -113,6 +115,7 @@ export const DEFAULTS: Settings = {
   autoImage: true,
   autoSkip: [],
   timeline: [],
+  timelineSnap: 'bar',
 };
 
 /** Keys that would reach Object.prototype when used on a plain object */
@@ -125,7 +128,7 @@ export function parseSettings(raw: unknown): Settings {
   const r = raw as Record<string, unknown>;
   const target = s as unknown as Record<string, unknown>;
   for (const key of Object.keys(DEFAULTS) as (keyof Settings)[]) {
-    if (key === 'variants' || key === 'params' || key === 'autoSkip' || key === 'timeline') continue;
+    if (key === 'variants' || key === 'params' || key === 'autoSkip' || key === 'timeline' || key === 'timelineSnap') continue;
     const v = r[key];
     if (typeof v === typeof DEFAULTS[key] && (typeof v !== 'number' || Number.isFinite(v))) target[key] = v;
   }
@@ -145,6 +148,7 @@ export function parseSettings(raw: unknown): Settings {
     }
   }
   s.timeline = parseClips(r.timeline);
+  if (r.timelineSnap === 'off' || r.timelineSnap === 'beat' || r.timelineSnap === 'bar') s.timelineSnap = r.timelineSnap;
   if (Array.isArray(r.autoSkip)) s.autoSkip = r.autoSkip.filter((id): id is string => typeof id === 'string');
   return s;
 }

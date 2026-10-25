@@ -1333,3 +1333,25 @@ input[type='range'] {
 .timeline-open .toolbar.left {
   top: 14px;
 }
+
+.tl-tempo {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-snap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.tl-snap[hidden] {
+  display: none;
+}
+
+.tl-ruler span.bar {
+  top: 20px;
+  border-left-color: var(--accent);
+  color: var(--accent);
+}
