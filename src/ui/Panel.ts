@@ -1,8 +1,9 @@
 import type { Bands } from '../audio/analysis';
 import type { SourceKind } from '../audio/AudioEngine';
 import { PALETTES } from '../modes/palettes';
-import type { Mode } from '../modes/types';
+import type { Mode, Palette } from '../modes/types';
 import { AUTO_EVERY } from '../autopilot';
+import { IMAGE_PALETTE_ID } from '../overlay/imagePalette';
 import { FONTS } from '../overlay/text';
 import { FILTERS } from '../render/filters';
 import { type Effects, type Settings, paramValue, variantOf } from '../settings';
@@ -130,6 +131,7 @@ export class Panel {
   private readonly sourceBtns = new Map<SourceKind, HTMLButtonElement>();
   private readonly modeBtns = new Map<string, HTMLButtonElement>();
   private readonly paletteBtns = new Map<string, HTMLButtonElement>();
+  private readonly paletteGrid = h('div', { class: 'palette-grid' });
   private readonly variantBox = h('div', { class: 'chips' });
   private readonly sourceExtra = h('div', { class: 'source-extra' });
   private readonly fxSetters = new Map<keyof Effects, (on: boolean) => void>();
@@ -242,18 +244,8 @@ export class Panel {
     });
 
     // Look
-    const palettes = h('div', { class: 'palette-grid' });
-    for (const p of PALETTES) {
-      const b = h(
-        'button',
-        { type: 'button', class: 'palette-btn', 'aria-pressed': 'false', onclick: () => app.setPalette(p.id) },
-        h('i', { class: 'swatch', style: { background: `linear-gradient(135deg, ${p.bg} 0 30%, ${p.b} 30% 55%, ${p.a} 55% 80%, ${p.c} 80%)` } }),
-        h('span', {}, p.name),
-      );
-      b.style.setProperty('--swatch', p.a);
-      this.paletteBtns.set(p.id, b);
-      palettes.append(b);
-    }
+    const palettes = this.paletteGrid;
+    for (const p of PALETTES) palettes.append(this.paletteButton(p));
     const fx = h('div', { class: 'switches' });
     const fxDefs: [keyof Effects, string, string?][] = [
       ['crt', 'CRT obrazovka', 'Zakřivení, řádky a barevný posun'],
@@ -542,6 +534,26 @@ export class Panel {
       const scale = Math.min(1, v[i % 3] * 1.4).toFixed(3);
       m.style.transform = i < 3 ? `scaleY(${scale})` : `scaleX(${scale})`;
     });
+  }
+
+  private paletteButton(p: Palette): HTMLButtonElement {
+    const b = h(
+      'button',
+      { type: 'button', class: 'palette-btn', 'aria-pressed': 'false', onclick: () => this.app.setPalette(p.id) },
+      h('i', { class: 'swatch', style: { background: `linear-gradient(135deg, ${p.bg} 0 30%, ${p.b} 30% 55%, ${p.a} 55% 80%, ${p.c} 80%)` } }),
+      h('span', {}, p.name),
+    );
+    b.style.setProperty('--swatch', p.a);
+    this.paletteBtns.set(p.id, b);
+    return b;
+  }
+
+  /** Show the palette taken from the user image first in the grid, or remove it (null). */
+  setImagePalette(p: Palette | null): void {
+    this.paletteBtns.get(IMAGE_PALETTE_ID)?.remove();
+    this.paletteBtns.delete(IMAGE_PALETTE_ID);
+    if (p) this.paletteGrid.prepend(this.paletteButton(p));
+    this.sync();
   }
 
   /** Refresh pressed states; rebuild variant chips and source controls only when they change. */

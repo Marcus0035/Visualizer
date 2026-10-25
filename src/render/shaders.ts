@@ -28,6 +28,9 @@ uniform vec3 uA;
 uniform vec3 uB;
 uniform vec3 uC;
 uniform sampler2D uSpectrum; // 512x1, red = 0..1 magnitude
+uniform sampler2D uImage;    // user image, premultiplied, with mipmaps (y up)
+uniform float uHasImage;
+uniform float uImageAspect;  // image width / height
 `;
 
 /** Final pass: user image and text overlays, then CRT, glitch, grain and strobe. */

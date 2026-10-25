@@ -3,8 +3,9 @@ import { AudioEngine } from './audio/AudioEngine';
 import { AUTO_EVERY, AutoClock, EVERYTHING, autoStep } from './autopilot';
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
-import type { Mode } from './modes/types';
-import { forgetImage, loadImageFile, restoreImage } from './overlay/image';
+import type { Mode, Palette } from './modes/types';
+import { type OverlayImage, forgetImage, loadImageFile, restoreImage } from './overlay/image';
+import { IMAGE_PALETTE_ID, paletteFromCanvas } from './overlay/imagePalette';
 import { FONTS, renderText } from './overlay/text';
 import { FILTERS } from './render/filters';
 import { Renderer } from './render/Renderer';
@@ -18,7 +19,8 @@ if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
 for (const store of [settings.variants, settings.params]) {
   for (const id of Object.keys(store)) if (!MODES.some((m) => m.id === id)) delete store[id];
 }
-if (!PALETTES.some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
+// The image palette comes back once the stored image is restored
+if (settings.palette !== IMAGE_PALETTE_ID && !PALETTES.some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
 if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
 if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
 settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
@@ -51,9 +53,19 @@ audio.volume = settings.volume;
 
 const currentMode = (): Mode => MODES.find((m) => m.id === settings.mode)!;
 
-const currentPalette = () => PALETTES.find((p) => p.id === settings.palette)!;
-
 let hasImage = false;
+/** Colors taken from the user image, offered as the first palette */
+let imagePalette: Palette | null = null;
+
+const allPalettes = (): Palette[] => (imagePalette ? [imagePalette, ...PALETTES] : PALETTES);
+const currentPalette = (): Palette => allPalettes().find((p) => p.id === settings.palette) ?? PALETTES[0];
+
+function showImage(img: OverlayImage): void {
+  renderer.setImage(img);
+  hasImage = true;
+  imagePalette = paletteFromCanvas(img.canvas);
+  panel.setImagePalette(imagePalette);
+}
 let textJob = 0;
 let imageJob = 0;
 
@@ -69,8 +81,11 @@ async function useImage(file: File): Promise<void> {
   try {
     const { image, saved } = await loadImageFile(file);
     if (job !== imageJob) return;
-    renderer.setImage(image);
-    hasImage = true;
+    showImage(image);
+    // A new image turns straight into a motif in its own colors
+    settings.mode = 'motif';
+    settings.palette = IMAGE_PALETTE_ID;
+    changed();
     panel.setStatus(saved ? '' : 'Obrázek je moc velký na uložení, po restartu zmizí.');
   } catch {
     if (job === imageJob) panel.setStatus('Obrázek nejde načíst.', true);
@@ -179,7 +194,10 @@ const actions: PanelActions = {
     renderer.setImage(null);
     forgetImage();
     hasImage = false;
-    panel.sync();
+    imagePalette = null;
+    panel.setImagePalette(null);
+    if (settings.palette === IMAGE_PALETTE_ID) settings.palette = PALETTES[0].id;
+    changed();
   },
   setImageStyle(i) {
     settings.imageStyle = i;
@@ -245,9 +263,8 @@ void updateText();
 const restoreJob = ++imageJob;
 void restoreImage().then((img) => {
   if (!img || restoreJob !== imageJob) return;
-  renderer.setImage(img);
-  hasImage = true;
-  panel.sync();
+  showImage(img);
+  changed();
 });
 
 // A mouse click should not leave the button focused, otherwise Space presses it again
@@ -316,8 +333,9 @@ window.addEventListener('keydown', (e) => {
       return actions.setVariant((variantOf(m, settings) + 1) % m.variants.length);
     }
     case 'p': {
-      const i = PALETTES.findIndex((p) => p.id === settings.palette);
-      return actions.setPalette(PALETTES[(i + 1) % PALETTES.length].id);
+      const list = allPalettes();
+      const i = list.findIndex((p) => p.id === settings.palette);
+      return actions.setPalette(list[(i + 1) % list.length].id);
     }
     case 'c':
       return actions.setEffect('crt', !settings.crt);

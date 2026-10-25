@@ -65,6 +65,8 @@ export interface Mode2D extends ModeBase {
 export interface ModeGL extends ModeBase {
   kind: 'gl';
   fragment: string;
+  /** Draws its own motif from the user image (uImage), so the image overlay is hidden */
+  usesImage?: boolean;
 }
 
 export type Mode = Mode2D | ModeGL;

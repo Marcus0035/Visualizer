@@ -302,7 +302,9 @@ export class Renderer {
     gl.uniform1f(p.loc('uFilterAmt'), Math.min(1, Math.max(0, fx.filterAmount)) * (fx.filterBeat ? 0.7 + 0.6 * audio.pulse : 1));
 
     const rects = this.overlayRects(fx.overlaySize, audio);
-    gl.uniform1f(p.loc('uHasImage'), this.image.present ? 1 : 0);
+    // A mode that builds its motif from the image does not also show the picture itself
+    const showImage = this.image.present && !(mode.kind === 'gl' && mode.usesImage);
+    gl.uniform1f(p.loc('uHasImage'), showImage ? 1 : 0);
     gl.uniform1f(p.loc('uImageAlpha'), this.image.hasAlpha ? 1 : 0);
     gl.uniform1i(p.loc('uImageStyle'), fx.imageStyle);
     gl.uniform4fv(p.loc('uImageRect'), rects.image);
@@ -334,11 +336,16 @@ export class Renderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.specTex);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SPECTRUM_SIZE, 1, gl.RED, gl.UNSIGNED_BYTE, this.specBytes);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.image.tex);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
     gl.viewport(0, 0, v.width, v.height);
     gl.useProgram(p.handle);
     gl.uniform1i(p.loc('uSpectrum'), 1);
+    gl.uniform1i(p.loc('uImage'), 2);
+    gl.uniform1f(p.loc('uHasImage'), this.image.present ? 1 : 0);
+    gl.uniform1f(p.loc('uImageAspect'), this.image.width / this.image.height);
     gl.uniform2f(p.loc('uRes'), v.width, v.height);
     gl.uniform1f(p.loc('uTime'), this.clock);
     gl.uniform1f(p.loc('uPhase'), this.phase);
