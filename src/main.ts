@@ -253,7 +253,7 @@ const AUTO_CONTEXT: AutoContext = {
   modes: MODES,
   palettes: PALETTES,
   filterCount: FILTERS.length,
-  imageChoices: Object.fromEntries(IMAGE_CHOICES.filter(([key]) => key === 'imageMotion' || key === 'imagePos').map(([key, , names]) => [key, names.length])),
+  imageChoices: Object.fromEntries(IMAGE_CHOICES.filter(([key]) => key === 'imageMotion').map(([key, , names]) => [key, names.length])),
 };
 
 const autoClock = new AutoClock();
@@ -270,8 +270,8 @@ function autoJump(): void {
 const history: string[] = [];
 
 function look(): string {
-  const { mode, variants, params, palette, filter, imageMotion, imagePos } = settings;
-  return JSON.stringify({ mode, variants, params, palette, filter, imageMotion, imagePos });
+  const { mode, variants, params, palette, filter, imageMotion } = settings;
+  return JSON.stringify({ mode, variants, params, palette, filter, imageMotion });
 }
 
 /** Random button and scroll wheel: everything new, like flipping through a feed. */

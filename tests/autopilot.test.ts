@@ -90,7 +90,7 @@ describe('autoStep', () => {
 
 describe('autoStep image', () => {
   it('changes image settings only when allowed, and only the given ones', () => {
-    const imgCtx = { ...ctx, imageChoices: { imageMotion: 5, imagePos: 4 } };
+    const imgCtx = { ...ctx, imageChoices: { imageMotion: 5 } };
     const off = parseSettings({ autoImage: false });
     autoStep(off, imgCtx, seq(3));
     expect([off.imageShape, off.imageMotion, off.imagePos]).toEqual([0, 1, 0]);
@@ -101,7 +101,7 @@ describe('autoStep image', () => {
       autoStep(on, imgCtx, rnd);
       expect(on.imageShape).toBe(0);
       expect(on.imageMotion).not.toBe(before);
-      expect(on.imagePos).toBeLessThan(4);
+      expect(on.imagePos).toBe(0);
       expect(on.imageMotion).toBeLessThan(5);
     }
   });
