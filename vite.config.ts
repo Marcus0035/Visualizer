@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
 /** Track the dev server starts with (instead of the demo loop); VISUALIZER_AUDIO overrides it. */
-const DEV_AUDIO = process.env.VISUALIZER_AUDIO ?? join(homedir(), 'Downloads', '1.wav');
+const DEV_AUDIO = process.env.VISUALIZER_AUDIO ?? join(homedir(), 'downloads', '1.wav');
 
 /** Dev server only: serves DEV_AUDIO at /dev-audio, 404 when the file is missing. */
 function devAudio(): Plugin {
