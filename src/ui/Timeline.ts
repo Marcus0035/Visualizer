@@ -218,7 +218,7 @@ export class Timeline {
       const barPx = grid.period * grid.beatsPerBar * pps;
       const beatPx = grid.period * pps;
       const line = (px: number, at: number, alpha: number): string =>
-        `linear-gradient(90deg, rgba(255,255,255,${alpha}) 0 1px, transparent 1px) ${at * pps}px 0 / ${px}px 100% repeat-x`;
+        `linear-gradient(90deg, rgba(var(--grid-rgb),${alpha}) 0 1px, transparent 1px) ${at * pps}px 0 / ${px}px 100% repeat-x`;
       inner.style.backgroundImage = [line(barPx, firstBar(grid), 0.16), beatPx >= 7 ? line(beatPx, grid.offset, 0.06) : ''].filter(Boolean).join(',');
       inner.style.backgroundRepeat = 'repeat-x';
       // Bar numbers; only every few bars when they would crowd
