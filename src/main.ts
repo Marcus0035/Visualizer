@@ -39,7 +39,6 @@ for (const [key, , names] of IMAGE_CHOICES) {
 settings.imageOpacity = Math.min(1, Math.max(0.1, settings.imageOpacity));
 settings.imageGlow = Math.min(1, Math.max(0, settings.imageGlow));
 settings.imageFade = Math.min(1, Math.max(0, settings.imageFade));
-settings.imageBlur = Math.min(1, Math.max(0, settings.imageBlur ?? 0));
 if (!AUTO_EVERY.includes(settings.autoBeats)) settings.autoBeats = 1;
 settings.autoSkip = [...new Set(settings.autoSkip.filter((id) => MODES.some((m) => m.id === id)))];
 // The autopilot needs at least one mode to pick from
