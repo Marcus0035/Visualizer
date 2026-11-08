@@ -388,7 +388,7 @@ export class Renderer {
     gl.uniform1f(p.loc('uImageFade'), fx.imageFade);
     gl.uniform4fv(p.loc('uImageRect'), rects.image);
     gl.uniform2f(p.loc('uImageTexel'), 1 / this.image.width, 1 / this.image.height);
-    gl.uniform1f(p.loc('uImageLod'), this.lod(fx.imageShape > 0 ? side : this.image.width, rects.image));
+    gl.uniform1f(p.loc('uImageLod'), this.lod(fx.imageShape > 0 ? side : this.image.width, rects.image) + fx.imageBlur * 7);
     gl.uniform1f(p.loc('uTextLod'), this.lod(this.text.width, rects.text));
     gl.uniform1f(p.loc('uHasText'), this.text.present ? 1 : 0);
     gl.uniform4fv(p.loc('uTextRect'), rects.text);

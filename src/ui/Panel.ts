@@ -43,7 +43,7 @@ export interface PanelActions {
   /** A loaded track that can be turned into a video in the background */
   canExportInBackground(): boolean;
   setImageChoice(key: ImageChoice, index: number): void;
-  setImageAmount(key: 'imageOpacity' | 'imageGlow' | 'imageFade', value: number): void;
+  setImageAmount(key: 'imageOpacity' | 'imageBlur' | 'imageGlow' | 'imageFade', value: number): void;
   setOverlaySize(value: number): void;
   setText(text: string): void;
   setFont(id: string): void;
@@ -534,6 +534,7 @@ export class Panel {
           ),
           ...imageChoices,
           slider('Opacity', 0.1, 1, 0.01, s.imageOpacity, (v) => app.setImageAmount('imageOpacity', v)),
+          slider('Blur', 0, 1, 0.01, s.imageBlur, (v) => app.setImageAmount('imageBlur', v)),
           slider('Glow around', 0, 1, 0.01, s.imageGlow, (v) => app.setImageAmount('imageGlow', v)),
           slider('Fade out edges', 0, 1, 0.01, s.imageFade, (v) => app.setImageAmount('imageFade', v)),
           h('small', { class: 'hint' }, 'You can also drop an image onto the window.'),
