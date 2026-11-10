@@ -30,4 +30,10 @@ function devAudio(): Plugin {
 
 export default defineConfig({
   plugins: [devAudio()],
+  build: {
+    rollupOptions: {
+      // settings.html: the settings window of the desktop app (desktop/visualizer.py)
+      input: { main: 'index.html', settings: 'settings.html' },
+    },
+  },
 });

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Visualizer
+Comment=Audio-reactive visuals with a separate settings window
+Exec=python3 /home/marek/dev/Visualizer/desktop/visualizer.py
+Icon=/home/marek/dev/Visualizer/public/icon.svg
+Categories=AudioVideo;Audio;
+StartupWMClass=com.marcus0035.Visualizer

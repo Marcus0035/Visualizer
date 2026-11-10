@@ -1434,3 +1434,135 @@ input[type='range'] {
     background: rgba(0, 0, 0, 0.3);
   }
 }
+
+/* Desktop settings window (settings.html): every section at once */
+body.settings-window {
+  --page: #121216;
+  --nav-width: 220px;
+  background: var(--page);
+}
+
+@media (prefers-color-scheme: light) {
+  body.settings-window {
+    --page: #f6f6f8;
+  }
+}
+
+.settings-page {
+  display: flex;
+  height: 100%;
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: var(--nav-width);
+  padding: 12px 8px;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+
+.nav-link span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-link kbd {
+  font: 11px/1 ui-monospace, monospace;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.nav-link:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.nav-link[aria-current='true'] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+}
+
+.nav-link[aria-current='true'] svg {
+  color: var(--accent);
+}
+
+.page-body {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px 20px 32px;
+  scrollbar-width: thin;
+  outline: none;
+}
+
+.page-columns {
+  columns: 320px;
+  column-gap: 16px;
+}
+
+.page-columns > .card {
+  break-inside: avoid;
+  margin-bottom: 16px;
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+  font-size: 15px;
+  font-weight: 650;
+  break-after: avoid;
+  scroll-margin-top: 12px;
+  outline: none;
+}
+
+.group-title svg {
+  color: var(--accent);
+}
+
+.settings-offline {
+  padding: 24px;
+  color: var(--muted);
+}
+
+/* Narrow window: the section list turns into an icon strip */
+@media (max-width: 640px) {
+  .side-nav {
+    width: auto;
+    padding: 8px 4px;
+  }
+
+  .nav-link {
+    padding: 9px;
+  }
+
+  .nav-link span,
+  .nav-link kbd {
+    display: none;
+  }
+
+  .page-body {
+    padding: 12px;
+  }
+}

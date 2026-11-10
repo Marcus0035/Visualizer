@@ -11,6 +11,18 @@ npm test         # unit testy analyzy zvuku
 npm run build    # produkcni build do dist/
 ```
 
+## Desktop app
+
+```
+npm run desktop                      # build, then run desktop/visualizer.py
+python3 desktop/visualizer.py --help # --dev URL, --audio FILE, --windowed
+```
+
+GTK4 + WebKitGTK 6.0 (python3-gi). The visualizer fills the screen in one window; every setting is
+in a second window (settings button or H), all sections at once, changes apply live. Keys in the
+settings window: 1-7 section, j/k scroll, g/G top/bottom, Ctrl+W close, Ctrl+Q quit. Videos go to
+~/Videos. No tab audio source (system sound: the "Monitor of ..." input).
+
 ## Zdroje zvuku
 - Demo: vestavena smycka (bez mikrofonu)
 - Vstup: mikrofon / line-in; zvuk systemu pres zarizeni "Monitor of ..." (PipeWire/Pulse)

@@ -62,6 +62,17 @@ export interface PanelActions {
   toggleTimeline(): void;
   back(): void;
   canGoBack(): boolean;
+  /** Desktop app: settings live in their own window, the settings button opens it */
+  openSettings?(): void;
+  /** Every status message, e.g. to forward it to the desktop settings window */
+  onStatus?(text: string, error: boolean): void;
+}
+
+export interface PanelOptions {
+  /** 'dialog': tabs in a dialog over the visuals; 'page': every section at once on a full page (desktop settings window) */
+  layout?: 'dialog' | 'page';
+  /** Sound sources to offer (default all) */
+  sources?: SourceKind[];
 }
 
 /** What a single random button re-rolls */
@@ -201,7 +212,10 @@ export class Panel {
   /** Elements made inert while the dialog is open (focus stays inside) */
   private inerted: HTMLElement[] = [];
 
-  constructor(private readonly app: PanelActions) {
+  constructor(
+    private readonly app: PanelActions,
+    options: PanelOptions = {},
+  ) {
     const s = app.settings;
 
     // Toolbar
@@ -328,7 +342,7 @@ export class Panel {
 
     // Sound
     const sources = h('div', { class: 'segmented' });
-    for (const src of SOURCES) {
+    for (const src of SOURCES.filter((x) => !options.sources || options.sources.includes(x.kind))) {
       const b = h(
         'button',
         { type: 'button', 'aria-pressed': 'false', onclick: () => this.chooseSource(src.kind) },
@@ -553,6 +567,16 @@ export class Panel {
       ],
     };
 
+    this.closeBtn = h(
+      'button',
+      { class: 'icon-btn close', title: 'Close (Esc)', 'aria-label': 'Close settings', onclick: () => this.close() },
+      icon('X', 20),
+    );
+    if (options.layout === 'page') {
+      this.el = this.buildPage(panels);
+      return;
+    }
+
     const tablist = h('nav', { class: 'tabs', role: 'tablist', 'aria-label': 'Settings sections' });
     const body = h('div', { class: 'modal-body' });
     for (const t of TABS) {
@@ -574,12 +598,6 @@ export class Panel {
       body.append(panel);
     }
 
-    this.closeBtn = h(
-      'button',
-      { class: 'icon-btn close', title: 'Close (Esc)', 'aria-label': 'Close settings', onclick: () => this.close() },
-      icon('X', 20),
-    );
-
     this.el = h(
       'div',
       { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'settings-title' },
@@ -600,6 +618,72 @@ export class Panel {
     this.el.inert = true;
     const saved = TABS.find((t) => t.id === s.settingsTab);
     this.showTab(saved ? saved.id : 'mode');
+  }
+
+  /**
+   * Every section at once: a side list of sections and the cards flowing into as many
+   * columns as the width allows. Keys: 1-9 jump to a section, j/k scroll (arrows in the
+   * list move between sections), g/G top/bottom, Esc leaves a text field.
+   */
+  private buildPage(panels: Record<TabId, HTMLElement[]>): HTMLElement {
+    const nav = h('nav', { class: 'side-nav', 'aria-label': 'Settings sections' });
+    const columns = h('div', { class: 'page-columns' });
+    const body = h('main', { class: 'page-body', tabindex: '-1' }, columns);
+    const items: HTMLButtonElement[] = [];
+    const groups: HTMLElement[] = [];
+    const select = (i: number, scroll: boolean): void => {
+      items.forEach((b, j) => (j === i ? b.setAttribute('aria-current', 'true') : b.removeAttribute('aria-current')));
+      if (scroll) groups[i].scrollIntoView({ block: 'start', behavior: 'smooth' });
+    };
+    TABS.forEach((t, i) => {
+      const title = h('h1', { class: 'group-title', id: `group-${t.id}`, tabindex: '-1' }, icon(t.icon, 18), h('span', {}, t.label));
+      groups.push(title);
+      columns.append(title, ...panels[t.id]);
+      const b = h(
+        'button',
+        { type: 'button', class: 'nav-link', title: `${t.label} (${i + 1})`, onclick: () => select(i, true) },
+        icon(t.icon, 18),
+        h('span', {}, t.label),
+        h('kbd', {}, String(i + 1)),
+      );
+      b.addEventListener('keydown', (e) => {
+        const next = { ArrowDown: i + 1, j: i + 1, ArrowUp: i - 1, k: i - 1, Home: 0, g: 0, End: TABS.length - 1, G: TABS.length - 1 }[e.key];
+        if (next === undefined) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const n = (next + TABS.length) % TABS.length;
+        items[n].focus();
+        select(n, true);
+      });
+      items.push(b);
+      nav.append(b);
+    });
+    select(0, false);
+
+    window.addEventListener('keydown', (e) => {
+      const target = e.target instanceof Element ? e.target : document.body;
+      if (e.key === 'Escape') {
+        // Leave a text field; the window itself never closes on Esc
+        if (target instanceof HTMLElement && target.matches('input, select, textarea') && !document.querySelector('dialog[open]')) target.blur();
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey || target.matches('input, select, textarea') || document.querySelector('dialog[open]')) return;
+      const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
+      if (digit && Number(digit[1]) >= 1 && Number(digit[1]) <= TABS.length) {
+        e.preventDefault();
+        const i = Number(digit[1]) - 1;
+        select(i, true);
+        groups[i].focus({ preventScroll: true });
+        return;
+      }
+      const step = { j: 80, ArrowDown: 80, k: -80, ArrowUp: -80, PageDown: body.clientHeight * 0.9, PageUp: -body.clientHeight * 0.9 }[e.key];
+      if (step !== undefined) {
+        e.preventDefault();
+        body.scrollBy({ top: step });
+      } else if (e.key === 'g') body.scrollTo({ top: 0 });
+      else if (e.key === 'G') body.scrollTo({ top: body.scrollHeight });
+    });
+    return h('div', { class: 'settings-page' }, nav, body);
   }
 
   private updateExportNote(): void {
@@ -647,6 +731,7 @@ export class Panel {
   }
 
   open(): void {
+    if (this.app.openSettings) return this.app.openSettings();
     if (this.isOpen) return;
     this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.el.inert = false;
@@ -702,6 +787,7 @@ export class Panel {
 
   /** Show a message in the sound tab and as a short toast. */
   setStatus(text: string, error = false): void {
+    this.app.onStatus?.(text, error);
     this.status.textContent = text;
     this.status.classList.toggle('error', error);
     if (text) {

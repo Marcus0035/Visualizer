@@ -20,6 +20,8 @@ import { h, icon } from './ui/dom';
 import { Timeline } from './ui/Timeline';
 import { type Clip, unlockedParts, withTimeline } from './timeline';
 import { IMAGE_CHOICES, Panel, type PanelActions, type RandomPart } from './ui/Panel';
+import { isDesktop, onMessage, post } from './desktop/bridge';
+import type { DesktopState, ToMain, ToSettings } from './desktop/protocol';
 
 const settings = loadSettings();
 let customPalettes = loadCustomPalettes();
@@ -329,7 +331,33 @@ function changed(): void {
   saveSettings(settings);
   document.documentElement.style.setProperty('--accent', currentPalette().a);
   panel.sync();
+  pushState();
 }
+
+/** Desktop app: send the current state to the settings window (at most once per task). */
+let statePending = false;
+function pushState(): void {
+  if (!isDesktop || statePending) return;
+  statePending = true;
+  setTimeout(() => {
+    statePending = false;
+    const state: DesktopState = {
+      settings,
+      source: actions.source(),
+      hasImage,
+      canGoBack: history.length > 0,
+      canExportInBackground: actions.canExportInBackground(),
+      customPalettes,
+      imagePalette,
+      accent: currentPalette().a,
+    };
+    sendSettings({ type: 'state', state });
+  });
+}
+
+const sendSettings = (msg: ToSettings): void => post(msg);
+/** The settings window is open: worth sending the level meters */
+let settingsVisible = false;
 
 const actions: PanelActions = {
   modes: MODES,
@@ -395,7 +423,8 @@ const actions: PanelActions = {
   togglePlay: () => audio.togglePlay(),
   listInputs: () => audio.listInputs(),
   toggleFullscreen() {
-    if (document.fullscreenElement) void document.exitFullscreen();
+    if (isDesktop) post({ type: 'toggleFullscreen' });
+    else if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen();
   },
   hasImage: () => hasImage,
@@ -515,10 +544,56 @@ const timeline = new Timeline({
   palettes: allPalettes,
 });
 document.body.append(timeline.el);
+if (isDesktop) {
+  actions.openSettings = () => post({ type: 'openSettings' });
+  actions.onStatus = (text, error) => text && sendSettings({ type: 'status', text, error });
+}
 const panel = new Panel(actions);
 panel.setCustomPalettes(customPalettes);
-document.body.append(panel.leftbar, panel.toolbar, panel.el, panel.exportDialog, panel.toast);
-audio.onchange = () => panel.sync();
+document.body.append(panel.leftbar, panel.toolbar, panel.exportDialog, panel.toast);
+if (!isDesktop) document.body.append(panel.el);
+audio.onchange = () => {
+  panel.sync();
+  pushState();
+};
+
+/** Actions the settings window may call (what PanelActions offers, nothing else) */
+type Callable = (...args: unknown[]) => unknown;
+onMessage<ToMain>(async (msg) => {
+  if (msg.type === 'hello') return pushState();
+  if (msg.type === 'settingsVisible') return void (settingsVisible = msg.on);
+  if (msg.type === 'loadFile') return void loadFromUrl(msg.kind, msg.url, msg.name);
+  if (msg.type !== 'call') return;
+  const fn = Object.hasOwn(actions, msg.name) ? (actions as unknown as Record<string, unknown>)[msg.name] : undefined;
+  try {
+    if (typeof fn !== 'function') throw new Error(`Unknown action ${msg.name}`);
+    let value = await (fn as Callable).apply(actions, msg.args);
+    // Device infos do not survive JSON: keep what the list shows
+    if (msg.name === 'listInputs') value = (value as MediaDeviceInfo[]).map(({ deviceId, label }) => ({ deviceId, label }));
+    sendSettings({ type: 'reply', id: msg.id, ok: true, value });
+  } catch (err) {
+    sendSettings({ type: 'reply', id: msg.id, ok: false, error: err instanceof Error ? err.message : String(err) });
+  }
+  panel.sync();
+  pushState();
+});
+
+/** Desktop app: a file picked in the native dialog, served by the host. */
+async function loadFromUrl(kind: 'audio' | 'image', url: string, name: string): Promise<void> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const file = new File([blob], name, { type: blob.type });
+    if (kind === 'image') await useImage(file);
+    else if (start.isConnected) {
+      pendingTrack = file;
+      void begin();
+    } else await playFile(file);
+  } catch (err) {
+    panel.setStatus(`Cannot open ${name}: ${(err as Error).message}`, true);
+  }
+}
 changed();
 void updateText();
 const restoreJob = ++imageJob;
@@ -691,16 +766,7 @@ const start = h(
   { class: 'start' },
   h(
     'button',
-    {
-      class: 'start-btn',
-      type: 'button',
-      onclick: async () => {
-        start.remove();
-        if (pendingTrack) await playFile(pendingTrack);
-        else if (!(import.meta.env.DEV && (await useDevAudio()))) await audio.useDemo();
-        panel.sync();
-      },
-    },
+    { class: 'start-btn', type: 'button', onclick: () => begin() },
     icon('Play', 22),
     h('span', {}, 'Start'),
   ),
@@ -715,9 +781,33 @@ const start = h(
 );
 document.body.append(start);
 
+async function begin(): Promise<void> {
+  if (!start.isConnected) return;
+  start.remove();
+  if (pendingTrack) await playFile(pendingTrack);
+  else if (!(await useStartTrack())) await audio.useDemo();
+  panel.sync();
+  pushState();
+}
+
+/** Track to start with: the dev server's one, or the one the desktop host passes in the URL. */
+async function useStartTrack(): Promise<boolean> {
+  const query = new URLSearchParams(location.search);
+  const url = query.get('audio');
+  if (isDesktop && url) {
+    await loadFromUrl('audio', url, query.get('name') ?? 'track');
+    return true;
+  }
+  return import.meta.env.DEV && useDevAudio();
+}
+
+// The desktop app needs no start click: its WebKit view may play sound right away
+if (isDesktop) void begin();
+
 let last = performance.now();
 const t0 = last;
 let reported = false;
+let lastMeter = 0;
 function frame(now: number): void {
   requestAnimationFrame(frame); // first, so one failing frame cannot stop the loop
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -730,6 +820,10 @@ function frame(now: number): void {
     renderer.render(sceneOf(withTimeline(settings, settings.timeline, timelineTime())), a, (now - t0) / 1000, dt);
     timeline.tick();
     panel.meter(a.bands);
+    if (settingsVisible && now - lastMeter > 50) {
+      lastMeter = now;
+      sendSettings({ type: 'meter', bands: a.bands });
+    }
   } catch (err) {
     if (!reported) console.error(err);
     reported = true;
