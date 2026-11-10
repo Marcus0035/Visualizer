@@ -15,7 +15,7 @@ npm run build    # produkcni build do dist/
 
 ```
 npm run desktop                      # build, then run desktop/visualizer.py
-python3 desktop/visualizer.py --help # --dev URL, --audio FILE, --windowed
+python3 desktop/visualizer.py --help # --dev URL, --audio FILE
 ```
 
 GTK4 + WebKitGTK 6.0 (python3-gi). The visualizer fills the screen in one window; every setting is

@@ -47,7 +47,7 @@ settings.autoSkip = [...new Set(settings.autoSkip.filter((id) => MODES.some((m) 
 if (settings.autoSkip.length >= MODES.length) settings.autoSkip = [];
 
 const canvas = h('canvas', { class: 'stage' });
-const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
+const fileInput = h('input', { type: 'file', accept: 'audio/*,.wav,.wave', hidden: true });
 const imageInput = h('input', { type: 'file', accept: 'image/*', hidden: true });
 document.body.append(canvas, fileInput, imageInput);
 
@@ -423,8 +423,8 @@ const actions: PanelActions = {
   togglePlay: () => audio.togglePlay(),
   listInputs: () => audio.listInputs(),
   toggleFullscreen() {
-    if (isDesktop) post({ type: 'toggleFullscreen' });
-    else if (document.fullscreenElement) void document.exitFullscreen();
+    if (isDesktop) return; // the window manager places the desktop windows
+    if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen();
   },
   hasImage: () => hasImage,
@@ -548,7 +548,7 @@ if (isDesktop) {
   actions.openSettings = () => post({ type: 'openSettings' });
   actions.onStatus = (text, error) => text && sendSettings({ type: 'status', text, error });
 }
-const panel = new Panel(actions);
+const panel = new Panel(actions, { fullscreen: !isDesktop });
 panel.setCustomPalettes(customPalettes);
 document.body.append(panel.leftbar, panel.toolbar, panel.exportDialog, panel.toast);
 if (!isDesktop) document.body.append(panel.el);

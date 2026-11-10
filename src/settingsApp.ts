@@ -55,7 +55,7 @@ const actions: PanelActions = {
   pickFile: () => post({ type: 'pick', kind: 'audio' }),
   togglePlay: send('togglePlay'),
   listInputs: () => call<MediaDeviceInfo[]>('listInputs'),
-  toggleFullscreen: send('toggleFullscreen'),
+  toggleFullscreen: () => {},
   hasImage: () => state?.hasImage ?? false,
   pickImage: () => post({ type: 'pick', kind: 'image' }),
   removeImage: send('removeImage'),
@@ -96,9 +96,8 @@ function apply(next: DesktopState): void {
   const paramsBefore = modeParams(settings);
   Object.assign(settings, next.settings);
   state = next;
-  document.documentElement.style.setProperty('--accent', next.accent);
   if (!panel) {
-    panel = new Panel(actions, { layout: 'page', sources: SOURCES });
+    panel = new Panel(actions, { layout: 'page', sources: SOURCES, fullscreen: false });
     document.body.append(panel.el, panel.toast);
   } else if (modeParams(settings) !== paramsBefore) panel.refreshParams();
   const pk = JSON.stringify(next.customPalettes);

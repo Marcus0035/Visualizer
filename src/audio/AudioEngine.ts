@@ -207,11 +207,15 @@ export class AudioEngine {
     const gen = ++this.generation;
     await this.resume();
     const el = new Audio();
-    el.src = URL.createObjectURL(file);
     el.loop = true;
+    // Wire it into Web Audio before it loads: WebKitGTK freezes playback when the source node
+    // is created after the element has loaded (currentTime stays put, no sound)
+    const node = this.ctx.createMediaElementSource(el);
+    el.src = URL.createObjectURL(file);
     const discard = () => {
       URL.revokeObjectURL(el.src);
       el.removeAttribute('src');
+      el.load();
     };
     // Make sure it decodes before tearing down the current source
     const ok = await new Promise<boolean>((resolve) => {
@@ -223,7 +227,7 @@ export class AudioEngine {
       discard();
       throw new Error('unsupported format');
     }
-    this.attach(this.ctx.createMediaElementSource(el), 'file', file.name, true, { media: el });
+    this.attach(node, 'file', file.name, true, { media: el });
     el.addEventListener('play', () => this.onchange());
     el.addEventListener('pause', () => this.onchange());
     try {

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Visualizer desktop app: the visualizer full screen in one window, all settings in another.
+"""Visualizer desktop app: two normal windows, the visualizer and all its settings.
 
 Both windows are WebKitGTK views of the built web app (dist/), served from a small local
 HTTP server. The settings window drives the visualizer through a message bridge:
 settings page -> this host -> visualizer page, and state flows back the same way.
 
-Usage: visualizer.py [--dev URL] [--audio FILE] [--windowed]
+Usage: visualizer.py [--dev URL] [--audio FILE]
   --dev URL     load the pages from a running Vite dev server instead of dist/
   --audio FILE  start with this track (default: $VISUALIZER_AUDIO, else the demo loop)
-  --windowed    do not start full screen
 """
 
 from __future__ import annotations
@@ -41,6 +40,7 @@ mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/javascript", ".mjs")
 mimetypes.add_type("image/svg+xml", ".svg")
 mimetypes.add_type("application/wasm", ".wasm")
+mimetypes.add_type("audio/wav", ".wav")
 
 
 class Files:
@@ -188,10 +188,10 @@ class App(Adw.Application):
         if audio and Path(audio).expanduser().is_file():
             path = Path(audio).expanduser()
             query = {"audio": self.file_url(path), "name": path.name}
-        if not self.args.windowed:
-            self.main_win.fullscreen()
+        # Two normal windows (visuals and settings); the window manager (Pop Shell) places them
         self.main_win.present()
         self.main_view.load_uri(f"{self.base}/" + (f"?{urlencode(query, quote_via=quote)}" if query else ""))
+        self.open_settings()
 
         self.add_actions()
 
@@ -248,11 +248,6 @@ class App(Adw.Application):
         kind = msg.get("type")
         if kind == "openSettings":
             self.open_settings()
-        elif kind == "toggleFullscreen":
-            if self.main_win.is_fullscreen():
-                self.main_win.unfullscreen()
-            else:
-                self.main_win.fullscreen()
         else:
             self.send_settings(msg)
 
@@ -270,6 +265,10 @@ class App(Adw.Application):
     def pick(self, image: bool) -> None:
         filt = Gtk.FileFilter(name="Images" if image else "Audio")
         filt.add_mime_type("image/*" if image else "audio/*")
+        if not image:
+            # WAV files are not always typed audio/*
+            for pattern in ("*.wav", "*.WAV", "*.wave"):
+                filt.add_pattern(pattern)
         store = Gio.ListStore.new(Gtk.FileFilter)
         store.append(filt)
         dialog = Gtk.FileDialog(title="Image" if image else "Audio file", filters=store, default_filter=filt)
@@ -318,7 +317,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dev", metavar="URL", help="load the pages from a Vite dev server")
     parser.add_argument("--audio", metavar="FILE", help="start with this track")
-    parser.add_argument("--windowed", action="store_true", help="do not start full screen")
     args = parser.parse_args()
     return App(args).run([sys.argv[0]])
 

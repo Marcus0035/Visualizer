@@ -73,6 +73,8 @@ export interface PanelOptions {
   layout?: 'dialog' | 'page';
   /** Sound sources to offer (default all) */
   sources?: SourceKind[];
+  /** Offer full screen (button and F); off in the desktop app, where the window manager places the windows */
+  fullscreen?: boolean;
 }
 
 /** What a single random button re-rolls */
@@ -305,11 +307,13 @@ export class Panel {
       ),
       this.exportBtn,
       this.autoBtn,
-      h(
-        'button',
-        { class: 'tool-btn', title: 'Fullscreen (F)', 'aria-label': 'Fullscreen', onclick: () => app.toggleFullscreen() },
-        icon('Maximize', 18),
-      ),
+      options.fullscreen === false
+        ? null
+        : h(
+            'button',
+            { class: 'tool-btn', title: 'Fullscreen (F)', 'aria-label': 'Fullscreen', onclick: () => app.toggleFullscreen() },
+            icon('Maximize', 18),
+          ),
       this.settingsBtn,
     );
 
@@ -561,7 +565,7 @@ export class Panel {
           h(
             'dl',
             { class: 'keys' },
-            ...[[app.modes.length >= 10 ? '1 - 9, 0' : `1 - ${app.modes.length}`, 'mode'], ...SHORTCUTS].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
+            ...[[app.modes.length >= 10 ? '1 - 9, 0' : `1 - ${app.modes.length}`, 'mode'], ...SHORTCUTS.filter(([k]) => k !== 'F' || options.fullscreen !== false)].flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
           ),
         ),
       ],
@@ -621,24 +625,27 @@ export class Panel {
   }
 
   /**
-   * Every section at once: a side list of sections and the cards flowing into as many
-   * columns as the width allows. Keys: 1-9 jump to a section, j/k scroll (arrows in the
+   * Every section at once: a side list of sections, and each section as a title over a grid
+   * of its cards (as many columns as the width allows). Keys: 1-9 jump to a section, j/k scroll (arrows in the
    * list move between sections), g/G top/bottom, Esc leaves a text field.
    */
   private buildPage(panels: Record<TabId, HTMLElement[]>): HTMLElement {
     const nav = h('nav', { class: 'side-nav', 'aria-label': 'Settings sections' });
-    const columns = h('div', { class: 'page-columns' });
-    const body = h('main', { class: 'page-body', tabindex: '-1' }, columns);
+    const body = h('main', { class: 'page-body', tabindex: '-1' });
     const items: HTMLButtonElement[] = [];
     const groups: HTMLElement[] = [];
+    let jumpUntil = 0; // a jump to a section scrolls smoothly; the list must not follow its way there
     const select = (i: number, scroll: boolean): void => {
       items.forEach((b, j) => (j === i ? b.setAttribute('aria-current', 'true') : b.removeAttribute('aria-current')));
-      if (scroll) groups[i].scrollIntoView({ block: 'start', behavior: 'smooth' });
+      if (!scroll) return;
+      jumpUntil = performance.now() + 900;
+      groups[i].scrollIntoView({ block: 'start', behavior: 'smooth' });
     };
     TABS.forEach((t, i) => {
       const title = h('h1', { class: 'group-title', id: `group-${t.id}`, tabindex: '-1' }, icon(t.icon, 18), h('span', {}, t.label));
       groups.push(title);
-      columns.append(title, ...panels[t.id]);
+      // One block per section: its title, then its cards in a grid whose rows share a top edge
+      body.append(h('section', { class: 'page-group', 'aria-labelledby': `group-${t.id}` }, title, h('div', { class: 'group-cards' }, ...panels[t.id])));
       const b = h(
         'button',
         { type: 'button', class: 'nav-link', title: `${t.label} (${i + 1})`, onclick: () => select(i, true) },
@@ -659,6 +666,21 @@ export class Panel {
       nav.append(b);
     });
     select(0, false);
+    // The list follows the scrolling: the section whose title last passed the top of the page
+    body.addEventListener(
+      'scroll',
+      () => {
+        if (performance.now() < jumpUntil) return;
+        const top = body.getBoundingClientRect().top + 48;
+        let i = 0;
+        groups.forEach((g, j) => {
+          if (g.getBoundingClientRect().top <= top) i = j;
+        });
+        if (body.scrollTop + body.clientHeight >= body.scrollHeight - 2) i = groups.length - 1;
+        if (items[i].getAttribute('aria-current') !== 'true') select(i, false);
+      },
+      { passive: true },
+    );
 
     window.addEventListener('keydown', (e) => {
       const target = e.target instanceof Element ? e.target : document.body;
