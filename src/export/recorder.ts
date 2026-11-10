@@ -1,4 +1,4 @@
-// Video export: the stage canvas plus the source audio through MediaRecorder.
+// Video export: a 2D copy of the stage canvas plus the source audio through MediaRecorder.
 
 export type ExportFormat = 'pc' | 'phone';
 
@@ -19,8 +19,14 @@ const TYPES = [
   'video/webm',
 ];
 
-export function pickType(isSupported: (type: string) => boolean): string | null {
-  return TYPES.find(isSupported) ?? null;
+/**
+ * WebKitGTK (the desktop app) says yes to MP4 but writes files whose video does not decode,
+ * and hangs on VP9: there VP8 + Opus is the one that works.
+ */
+const WEBKITGTK_TYPES = ['video/webm;codecs=vp8,opus', 'video/webm'];
+
+export function pickType(isSupported: (type: string) => boolean, webkitGtk = false): string | null {
+  return (webkitGtk ? WEBKITGTK_TYPES : TYPES).find(isSupported) ?? null;
 }
 
 /** visualizer-pc-2026-10-25-0945.mp4 */
@@ -34,15 +40,26 @@ export class VideoRecorder {
   private readonly rec: MediaRecorder;
   private readonly chunks: Blob[] = [];
   private readonly video: MediaStream;
+  /** 2D copy of the stage that is recorded: WebKitGTK captures a WebGL canvas without a
+   * preserved drawing buffer as black frames */
+  private readonly copy: HTMLCanvasElement;
+  private readonly copyCtx: CanvasRenderingContext2D;
   readonly startedAt = performance.now();
 
   constructor(
-    canvas: HTMLCanvasElement,
+    private readonly canvas: HTMLCanvasElement,
     audio: MediaStream,
     readonly type: string,
     readonly format: ExportFormat,
   ) {
-    this.video = canvas.captureStream(60);
+    this.copy = document.createElement('canvas');
+    this.copy.width = EXPORT_SIZES[format].width;
+    this.copy.height = EXPORT_SIZES[format].height;
+    const ctx = this.copy.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('no 2D canvas');
+    this.copyCtx = ctx;
+    this.frame();
+    this.video = this.copy.captureStream(60);
     const stream = new MediaStream([...this.video.getVideoTracks(), ...audio.getAudioTracks()]);
     this.rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: BITRATES[format], audioBitsPerSecond: 256_000 });
     this.rec.ondataavailable = (e) => {
@@ -50,6 +67,11 @@ export class VideoRecorder {
     };
     // Chunks every second, so a long recording does not sit in one huge buffer
     this.rec.start(1000);
+  }
+
+  /** Take the frame just drawn on the stage; call right after each render. */
+  frame(): void {
+    this.copyCtx.drawImage(this.canvas, 0, 0, this.copy.width, this.copy.height);
   }
 
   get seconds(): number {

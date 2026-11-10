@@ -11,7 +11,6 @@ import { FONTS, renderText } from './overlay/text';
 import { type BeatGrid, analyzeBeats } from './audio/beatgrid';
 import { SongStructure } from './audio/structure';
 import type { AudioFrame } from './audio/AudioEngine';
-import { offlineSupported, renderOffline } from './export/offline';
 import { EXPORT_SIZES, type ExportFormat, VideoRecorder, download, exportFileName, pickType } from './export/recorder';
 import { FILTERS } from './render/filters';
 import { Renderer, type Scene } from './render/Renderer';
@@ -177,6 +176,8 @@ async function exportInBackground(format: ExportFormat): Promise<void> {
   panel.setExportProgress(0);
   const text = await renderText(settings.text, settings.font);
   try {
+    // Loaded on first use: the encoder and muxer are big and most sessions never export
+    const { renderOffline } = await import('./export/offline');
     const blob = await renderOffline({
       buffer,
       format,
@@ -214,7 +215,7 @@ function startExport(format: ExportFormat, background = false): void {
     return;
   }
   if (recorder || offline) return;
-  const type = typeof MediaRecorder === 'undefined' ? null : pickType((t) => MediaRecorder.isTypeSupported(t));
+  const type = typeof MediaRecorder === 'undefined' ? null : pickType((t) => MediaRecorder.isTypeSupported(t), isDesktop);
   if (!type) {
     panel.setStatus('This browser cannot record video.', true);
     return;
@@ -248,7 +249,16 @@ async function stopExport(): Promise<void> {
   recorder = null;
   clearInterval(recordTimer);
   panel.setRecording(null);
-  const blob = await r.stop();
+  let blob = await r.stop();
+  if (isDesktop && r.type.startsWith('video/webm')) {
+    try {
+      // Loaded only here: the demuxer is big and only the desktop app needs it
+      const { retimeWebm } = await import('./export/retime');
+      blob = new Blob([await retimeWebm(new Uint8Array(await blob.arrayBuffer()))], { type: 'video/webm' });
+    } catch {
+      // Keep the recording as it came: better a file with odd timestamps than none
+    }
+  }
   renderer.setFixedSize(null);
   canvas.classList.remove('exporting');
   audio.restoreLoop();
@@ -450,7 +460,7 @@ const actions: PanelActions = {
   },
   startExport,
   stopExport: () => void stopExport(),
-  canExportInBackground: () => !!track && audio.kind === 'file' && offlineSupported(),
+  canExportInBackground: () => !!track && audio.kind === 'file' && typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined',
   setImageChoice(key, i) {
     settings[key] = i;
     changed();
@@ -818,6 +828,7 @@ function frame(now: number): void {
     const calm = applyStructure(a, track?.structure, settings, audio.currentTime, dt);
     if (settings.auto && calm < 0.5 && autoClock.tick(a.beat, a.level, dt, settings.autoBeats)) autoJump();
     renderer.render(sceneOf(withTimeline(settings, settings.timeline, timelineTime())), a, (now - t0) / 1000, dt);
+    recorder?.frame();
     timeline.tick();
     panel.meter(a.bands);
     if (settingsVisible && now - lastMeter > 50) {

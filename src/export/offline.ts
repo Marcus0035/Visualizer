@@ -30,10 +30,6 @@ export interface OfflineOptions {
   signal: AbortSignal;
 }
 
-export function offlineSupported(): boolean {
-  return typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined';
-}
-
 /** Resolves with the MP4, or null when cancelled. */
 export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
   const { buffer, format } = o;
@@ -41,6 +37,13 @@ export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
   const canvas = document.createElement('canvas');
   canvas.width = size.width;
   canvas.height = size.height;
+  // The encoder reads a 2D copy: WebKitGTK turns a VideoFrame of a WebGL canvas upside down
+  // (GL rows start at the bottom), a 2D canvas comes out right in every browser
+  const frameCanvas = document.createElement('canvas');
+  frameCanvas.width = size.width;
+  frameCanvas.height = size.height;
+  const frameCtx = frameCanvas.getContext('2d', { alpha: false });
+  if (!frameCtx) throw new Error('no 2D canvas');
   const renderer = new Renderer(canvas);
   renderer.setFixedSize(size);
   o.setup(renderer);
@@ -55,7 +58,7 @@ export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
 
     const target = new BufferTarget();
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-    const video = new CanvasSource(canvas, { codec: videoCodec, quality: QUALITY_HIGH });
+    const video = new CanvasSource(frameCanvas, { codec: videoCodec, quality: QUALITY_HIGH });
     const audio = new AudioBufferSource({ codec: audioCodec, quality: QUALITY_HIGH });
     output.addVideoTrack(video, { frameRate: OFFLINE_FPS });
     output.addAudioTrack(audio);
@@ -79,6 +82,7 @@ export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
         mono.position = left.position = right.position = end;
         const frame = analyzer.update(mono, left, right, dt, (i + 1) * dt * 1000);
         renderer.render(o.scene(frame, i * dt, dt), frame, i * dt, dt);
+        frameCtx.drawImage(canvas, 0, 0);
         await video.add(i * dt, dt);
         if (i % 15 === 0) {
           o.onProgress(i / frames);

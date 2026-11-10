@@ -7,6 +7,11 @@ describe('pickType', () => {
     expect(pickType((t) => t.startsWith('video/webm'))).toMatch(/^video\/webm/);
     expect(pickType(() => false)).toBeNull();
   });
+
+  it('takes VP8 WebM in WebKitGTK, whose MP4 recordings do not decode', () => {
+    expect(pickType(() => true, true)).toBe('video/webm;codecs=vp8,opus');
+    expect(pickType((t) => t.startsWith('video/mp4'), true)).toBeNull();
+  });
 });
 
 describe('exportFileName', () => {
