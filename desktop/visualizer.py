@@ -16,6 +16,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import secrets
 import sys
 import threading
@@ -95,6 +96,93 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(chunk)
 
 
+class Presets:
+    """Saved looks (src/presets.ts), one JSON file each in the data folder, plus which one opens at startup."""
+
+    MAX_BYTES = 32 << 20
+
+    def __init__(self, folder: Path) -> None:
+        self.folder = folder
+        self._startup = folder / "startup.json"
+
+    def _files(self) -> dict[str, Path]:
+        found: dict[str, Path] = {}
+        for path in sorted(self.folder.glob("*.json")):
+            if path == self._startup:
+                continue
+            preset = self._read(path)
+            if preset:
+                found.setdefault(preset["name"], path)
+        return found
+
+    def _read(self, path: Path) -> dict | None:
+        try:
+            if path.stat().st_size > self.MAX_BYTES:
+                return None
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if self.valid(data) else None
+
+    @staticmethod
+    def valid(data: object) -> bool:
+        return (
+            isinstance(data, dict)
+            and isinstance(data.get("name"), str)
+            and bool(data["name"].strip())
+            and isinstance(data.get("settings"), dict)
+            and (data.get("image") is None or isinstance(data.get("image"), str))
+        )
+
+    def listing(self) -> dict:
+        names = sorted(self._files(), key=str.casefold)
+        startup = self.startup_name()
+        return {"names": names, "startup": startup if startup in names else None}
+
+    def load(self, name: str) -> dict | None:
+        path = self._files().get(name)
+        return self._read(path) if path else None
+
+    def save(self, preset: object) -> None:
+        if not self.valid(preset):
+            return
+        preset = {"name": preset["name"].strip(), "settings": preset["settings"], "image": preset.get("image")}
+        self.folder.mkdir(parents=True, exist_ok=True)
+        path = self._files().get(preset["name"])
+        if not path:
+            stem = re.sub(r"[^A-Za-z0-9_-]+", "-", preset["name"]).strip("-").lower() or "preset"
+            path = self.folder / f"{stem}.json"
+            n = 1
+            while path.exists() or path == self._startup:
+                n += 1
+                path = self.folder / f"{stem}-{n}.json"
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(preset), encoding="utf-8")
+        tmp.replace(path)
+
+    def remove(self, name: str) -> None:
+        path = self._files().get(name)
+        if path:
+            path.unlink(missing_ok=True)
+        if self.startup_name() == name:
+            self.set_startup(None)
+
+    def startup_name(self) -> str | None:
+        try:
+            name = json.loads(self._startup.read_text(encoding="utf-8")).get("name")
+        except (OSError, ValueError, AttributeError):
+            return None
+        return name if isinstance(name, str) else None
+
+    def set_startup(self, name: str | None) -> None:
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self._startup.write_text(json.dumps({"name": name}), encoding="utf-8")
+
+    def startup(self) -> dict | None:
+        name = self.startup_name()
+        return self.load(name) if name else None
+
+
 def start_server(files: Files) -> ThreadingHTTPServer:
     handler = partial(type("BoundHandler", (Handler,), {"files": files}), directory=str(DIST))
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -108,8 +196,13 @@ def js_call(view: WebKit.WebView, message: dict) -> None:
     view.evaluate_javascript(f"window.__visualizer && window.__visualizer.receive({payload})", -1, None, None, None, None, None)
 
 
-def make_view(session: WebKit.NetworkSession, on_message) -> WebKit.WebView:
+def make_view(session: WebKit.NetworkSession, on_message, start_script: str | None = None) -> WebKit.WebView:
     content = WebKit.UserContentManager()
+    if start_script:
+        # Runs before the page's own scripts
+        content.add_script(
+            WebKit.UserScript.new(start_script, WebKit.UserContentInjectedFrames.TOP_FRAME, WebKit.UserScriptInjectionTime.START, None, None)
+        )
     content.register_script_message_handler(BRIDGE, None)
     content.connect(f"script-message-received::{BRIDGE}", lambda _m, value: on_message(json.loads(value.to_string())))
     # Sound may start without a click (no start screen in the desktop app)
@@ -177,8 +270,12 @@ class App(Adw.Application):
         cache = Path(GLib.get_user_cache_dir()) / "visualizer"
         session = self.session = WebKit.NetworkSession.new(str(data), str(cache))
         session.connect("download-started", self.on_download)
+        self.presets = Presets(data / "presets")
 
-        self.main_view = make_view(session, self.from_main)
+        # The startup preset reaches the page before it reads its stored settings (src/presets.ts)
+        startup = self.presets.startup()
+        script = f"window.__visualizerStartupPreset = {json.dumps(startup)};" if startup else None
+        self.main_view = make_view(session, self.from_main, script)
         self.main_view.set_background_color(_rgba("#000000"))
         self.main_win = Gtk.ApplicationWindow(application=self, title="Visualizer", default_width=1280, default_height=720)
         self.main_win.set_child(self.main_view)
@@ -257,10 +354,28 @@ class App(Adw.Application):
             self.settings_ready = True
             self.send_main({"type": "hello"})
             self.send_main({"type": "settingsVisible", "on": True})
+            self.send_presets()
+        elif kind == "presetSave":
+            self.presets.save(msg.get("preset"))
+            self.send_presets()
+        elif kind == "presetLoad":
+            preset = self.presets.load(str(msg.get("name")))
+            if preset:
+                self.send_main({"type": "applyPreset", "preset": preset})
+        elif kind == "presetRemove":
+            self.presets.remove(str(msg.get("name")))
+            self.send_presets()
+        elif kind == "presetStartup":
+            name = msg.get("name")
+            self.presets.set_startup(name if isinstance(name, str) else None)
+            self.send_presets()
         elif kind == "pick":
             self.pick(msg.get("kind") == "image")
         else:
             self.send_main(msg)
+
+    def send_presets(self) -> None:
+        self.send_settings({"type": "presets", "list": self.presets.listing()})
 
     def pick(self, image: bool) -> None:
         filt = Gtk.FileFilter(name="Images" if image else "Audio")

@@ -45,11 +45,15 @@ import {
   Factory,
   Eye,
   Clapperboard,
+  Bookmark,
+  Save,
   createElement,
   type IconNode,
 } from 'lucide';
 
 const ICONS: Record<string, IconNode> = {
+  Bookmark,
+  Save,
   LayoutGrid,
   Download,
   Smartphone,

@@ -6,6 +6,7 @@ import { AUTO_EVERY } from '../autopilot';
 import { IMAGE_PALETTE_ID, paletteFromFile } from '../overlay/imagePalette';
 import { FONTS } from '../overlay/text';
 import type { ExportFormat } from '../export/recorder';
+import type { Preset, PresetList } from '../presets';
 import { FILTERS } from '../render/filters';
 import { type Effects, type Settings, paramValue, variantOf } from '../settings';
 import { h, icon, toggle } from './dom';
@@ -66,6 +67,14 @@ export interface PanelActions {
   openSettings?(): void;
   /** Every status message, e.g. to forward it to the desktop settings window */
   onStatus?(text: string, error: boolean): void;
+  /** Desktop app: presets kept by the host; the Presets section shows only when this is set */
+  presets?(): PresetList;
+  savePreset?(name: string): void;
+  loadPreset?(name: string): void;
+  removePreset?(name: string): void;
+  setStartupPreset?(name: string | null): void;
+  /** Visualizer window: the current look (settings and image) as a preset */
+  currentPreset?(name: string): Preset;
 }
 
 export interface PanelOptions {
@@ -89,10 +98,14 @@ const TABS = [
   { id: 'filters', label: 'Filters', icon: 'Film' },
   { id: 'auto', label: 'Autopilot', icon: 'Shuffle' },
   { id: 'overlay', label: 'Image & text', icon: 'ImagePlus' },
+  { id: 'presets', label: 'Presets', icon: 'Bookmark' },
   { id: 'keys', label: 'Shortcuts', icon: 'Keyboard' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
+
+/** The settings dialog of the web version: presets need the desktop host */
+const DIALOG_TABS = TABS.filter((t) => t.id !== 'presets');
 
 /** Image settings shown as chips; the index is the stored value */
 export const IMAGE_CHOICES = [
@@ -174,6 +187,7 @@ export class Panel {
   private readonly paletteGrid = h('div', { class: 'palette-grid' });
   private newPaletteBtn!: HTMLButtonElement;
   private readonly customItems: HTMLElement[] = [];
+  private readonly presetList = h('div', { class: 'preset-list' });
   private readonly variantBox = h('div', { class: 'chips' });
   private readonly sourceExtra = h('div', { class: 'source-extra' });
   private readonly fxSetters = new Map<keyof Effects, (on: boolean) => void>();
@@ -279,8 +293,8 @@ export class Panel {
       h(
         'div',
         { class: 'export-options' },
-        option('pc', 'Monitor', 'For PC', 'Landscape 16:9, 1920 × 1080'),
-        option('phone', 'Smartphone', 'For phone', 'Portrait 9:16, 1080 × 1920'),
+        option('pc', 'Monitor', 'For PC', 'Landscape 16:9, 4K 3840 × 2160'),
+        option('phone', 'Smartphone', 'For phone', 'Portrait 9:16, 4K 2160 × 3840'),
       ),
       (this.backgroundRow = h(
         'div',
@@ -559,6 +573,7 @@ export class Panel {
         card('Text', textInput, h('h3', {}, 'Font'), fonts),
         card('Size', slider('Image and text', 0.2, 1, 0.01, s.overlaySize, (v) => app.setOverlaySize(v))),
       ],
+      presets: app.presets ? [this.buildPresets()] : [],
       keys: [
         card(
           'Keyboard shortcuts',
@@ -583,7 +598,7 @@ export class Panel {
 
     const tablist = h('nav', { class: 'tabs', role: 'tablist', 'aria-label': 'Settings sections' });
     const body = h('div', { class: 'modal-body' });
-    for (const t of TABS) {
+    for (const t of DIALOG_TABS) {
       const btn = h(
         'button',
         { type: 'button', role: 'tab', id: `tab-${t.id}`, 'aria-controls': `panel-${t.id}`, onclick: () => this.showTab(t.id) },
@@ -620,7 +635,7 @@ export class Panel {
     });
 
     this.el.inert = true;
-    const saved = TABS.find((t) => t.id === s.settingsTab);
+    const saved = DIALOG_TABS.find((t) => t.id === s.settingsTab);
     this.showTab(saved ? saved.id : 'mode');
   }
 
@@ -795,16 +810,71 @@ export class Panel {
 
   /** Arrow keys move between tabs (WAI-ARIA tabs pattern). */
   private tabKeys(e: KeyboardEvent, id: TabId): void {
-    const i = TABS.findIndex((t) => t.id === id);
+    const i = DIALOG_TABS.findIndex((t) => t.id === id);
     let next = -1;
-    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
-    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+    if (e.key === 'ArrowRight') next = (i + 1) % DIALOG_TABS.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + DIALOG_TABS.length) % DIALOG_TABS.length;
     else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = TABS.length - 1;
+    else if (e.key === 'End') next = DIALOG_TABS.length - 1;
     if (next < 0) return;
     e.preventDefault();
-    this.showTab(TABS[next].id);
-    this.tabBtns.get(TABS[next].id)?.focus();
+    this.showTab(DIALOG_TABS[next].id);
+    this.tabBtns.get(DIALOG_TABS[next].id)?.focus();
+  }
+
+  /** Presets card (desktop): name field with Save, then one row per saved preset. */
+  private buildPresets(): HTMLElement {
+    const name = h('input', { type: 'text', maxLength: 40, placeholder: 'Name', 'aria-label': 'Preset name' });
+    const save = (): void => {
+      const value = name.value.trim();
+      if (!value) return name.focus();
+      this.app.savePreset?.(value);
+      name.value = '';
+    };
+    name.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      save();
+    });
+    this.renderPresets();
+    return h(
+      'section',
+      { class: 'card wide' },
+      h('h2', {}, 'Presets'),
+      h(
+        'div',
+        { class: 'preset-save' },
+        h('label', { class: 'text-input' }, icon('Bookmark'), name),
+        h('button', { type: 'button', class: 'btn', onclick: save }, icon('Save'), h('span', {}, 'Save')),
+      ),
+      this.presetList,
+      h('small', { class: 'hint' }, 'Saves the whole look with its image. Click a preset to load it; the one with Startup on opens with the app. The same name replaces the old one.'),
+    );
+  }
+
+  /** Redraw the preset rows after the host sent a new list. */
+  renderPresets(): void {
+    const list = this.app.presets?.() ?? { names: [], startup: null };
+    if (!list.names.length) {
+      this.presetList.replaceChildren(h('small', { class: 'hint' }, 'No presets yet.'));
+      return;
+    }
+    this.presetList.replaceChildren(
+      ...list.names.map((name) => {
+        const startup = toggle('Startup', list.startup === name, (on) => this.app.setStartupPreset?.(on ? name : null));
+        return h(
+          'div',
+          { class: 'preset-row' },
+          h('button', { type: 'button', class: 'chip preset-name', 'aria-pressed': 'false', onclick: () => this.app.loadPreset?.(name) }, name),
+          startup.row,
+          h(
+            'button',
+            { type: 'button', class: 'icon-btn preset-remove', title: 'Delete', 'aria-label': `Delete ${name}`, onclick: () => this.app.removePreset?.(name) },
+            icon('Trash2'),
+          ),
+        );
+      }),
+    );
   }
 
   /** Show a message in the sound tab and as a short toast. */

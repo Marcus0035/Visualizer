@@ -9,6 +9,7 @@
   --pressed: rgba(255, 255, 255, 0.11);
   --grid-rgb: 255, 255, 255;
   --radius: 10px;
+  --danger: #ff6b6b;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif;
   font-size: 14px;
   color: var(--text);
@@ -1365,6 +1366,53 @@ input[type='range'] {
   color: var(--text);
 }
 
+/* Presets (desktop settings window) */
+.preset-save {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.preset-save .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.preset-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-row .switch-row {
+  flex: none;
+}
+
+.preset-remove {
+  flex: none;
+  color: var(--danger);
+}
+
+.preset-remove:hover {
+  border-color: var(--danger);
+}
+
 /* Light mode: windows, cards and the timeline follow the system. What floats over the visuals
    (toolbar buttons, start overlay, drop hint) stays dark glass, so it reads on any picture. */
 @media (prefers-color-scheme: light) {
@@ -1378,6 +1426,7 @@ input[type='range'] {
     --hover: rgba(0, 0, 0, 0.06);
     --pressed: rgba(0, 0, 0, 0.1);
     --grid-rgb: 0, 0, 0;
+    --danger: #c62828;
   }
 
   .toolbar,

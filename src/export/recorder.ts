@@ -2,12 +2,14 @@
 
 export type ExportFormat = 'pc' | 'phone';
 
+/** Real 4K (UHD) both ways */
 export const EXPORT_SIZES: Record<ExportFormat, { width: number; height: number }> = {
-  pc: { width: 1920, height: 1080 },
-  phone: { width: 1080, height: 1920 },
+  pc: { width: 3840, height: 2160 },
+  phone: { width: 2160, height: 3840 },
 };
 
-const BITRATES: Record<ExportFormat, number> = { pc: 16_000_000, phone: 12_000_000 };
+/** Video bitrate for 4K at 30 fps: sharp lasers and grain need a lot (YouTube asks 35-45 Mbps for 4K SDR) */
+export const EXPORT_BITRATE = 45_000_000;
 
 /** MP4 first (plays everywhere, phones and social apps take it), WebM where MP4 recording is missing. */
 const TYPES = [
@@ -61,7 +63,7 @@ export class VideoRecorder {
     this.frame();
     this.video = this.copy.captureStream(60);
     const stream = new MediaStream([...this.video.getVideoTracks(), ...audio.getAudioTracks()]);
-    this.rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: BITRATES[format], audioBitsPerSecond: 256_000 });
+    this.rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: EXPORT_BITRATE, audioBitsPerSecond: 256_000 });
     this.rec.ondataavailable = (e) => {
       if (e.data.size) this.chunks.push(e.data);
     };

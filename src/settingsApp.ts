@@ -8,12 +8,14 @@ import type { SourceKind } from './audio/AudioEngine';
 import { isDesktop, onMessage, post } from './desktop/bridge';
 import type { DesktopState, ToSettings } from './desktop/protocol';
 import { MODES } from './modes';
+import type { Preset, PresetList } from './presets';
 import { parseSettings } from './settings';
 import { h } from './ui/dom';
 import { Panel, type PanelActions } from './ui/Panel';
 
 const settings = parseSettings(null);
 let state: DesktopState | null = null;
+let presets: PresetList = { names: [], startup: null };
 let panel: Panel | null = null;
 let nextId = 1;
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
@@ -83,6 +85,16 @@ const actions: PanelActions = {
   toggleTimeline: send('toggleTimeline'),
   back: send('back'),
   canGoBack: () => state?.canGoBack ?? false,
+  // Presets live with the host: the look comes from the visualizer, the files from the host
+  presets: () => presets,
+  savePreset(name) {
+    void call<Preset>('currentPreset', name)
+      .then((preset) => post({ type: 'presetSave', preset }))
+      .catch(() => {});
+  },
+  loadPreset: (name) => post({ type: 'presetLoad', name }),
+  removePreset: (name) => post({ type: 'presetRemove', name }),
+  setStartupPreset: (name) => post({ type: 'presetStartup', name }),
 };
 
 /** The tab source needs screen sharing, which the desktop WebKit view does not offer */
@@ -121,6 +133,9 @@ onMessage<ToSettings>((msg) => {
       return panel?.meter(msg.bands);
     case 'status':
       return panel?.setStatus(msg.text, msg.error);
+    case 'presets':
+      presets = msg.list;
+      return panel?.renderPresets();
     case 'reply': {
       const p = pending.get(msg.id);
       pending.delete(msg.id);

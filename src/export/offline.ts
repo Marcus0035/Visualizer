@@ -14,7 +14,7 @@ import {
 import { FrameAnalyzer, type AudioFrame } from '../audio/AudioEngine';
 import { BufferAnalyser } from '../audio/bufferAnalyser';
 import { Renderer, type Scene } from '../render/Renderer';
-import { EXPORT_SIZES, type ExportFormat } from './recorder';
+import { EXPORT_BITRATE, EXPORT_SIZES, type ExportFormat } from './recorder';
 
 export const OFFLINE_FPS = 30;
 
@@ -28,6 +28,8 @@ export interface OfflineOptions {
   scene(frame: AudioFrame, time: number, dt: number): Scene;
   onProgress(fraction: number): void;
   signal: AbortSignal;
+  /** WebKitGTK: a VideoFrame of a WebGL canvas comes out upside down there */
+  glFramesFlipped?: boolean;
 }
 
 /** Resolves with the MP4, or null when cancelled. */
@@ -37,18 +39,15 @@ export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
   const canvas = document.createElement('canvas');
   canvas.width = size.width;
   canvas.height = size.height;
-  // The encoder reads a 2D copy: WebKitGTK turns a VideoFrame of a WebGL canvas upside down
-  // (GL rows start at the bottom), a 2D canvas comes out right in every browser
-  const frameCanvas = document.createElement('canvas');
-  frameCanvas.width = size.width;
-  frameCanvas.height = size.height;
-  const frameCtx = frameCanvas.getContext('2d', { alpha: false });
-  if (!frameCtx) throw new Error('no 2D canvas');
+  // WebKitGTK turns a VideoFrame of a WebGL canvas upside down (GL rows start at the bottom):
+  // there the renderer draws it flipped, so the encoder reads the GL canvas straight away. A 2D
+  // copy would also come out right, but at 4K that copy takes most of the time of each frame.
   const renderer = new Renderer(canvas);
   renderer.setFixedSize(size);
+  renderer.flipOutput = !!o.glFramesFlipped;
   o.setup(renderer);
   try {
-    const videoCodec = await getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], { ...size, quality: QUALITY_HIGH });
+    const videoCodec = await getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], { ...size, bitrate: EXPORT_BITRATE });
     const audioCodec = await getFirstEncodableAudioCodec(['aac', 'opus'], {
       numberOfChannels: buffer.numberOfChannels,
       sampleRate: buffer.sampleRate,
@@ -58,7 +57,7 @@ export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
 
     const target = new BufferTarget();
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-    const video = new CanvasSource(frameCanvas, { codec: videoCodec, quality: QUALITY_HIGH });
+    const video = new CanvasSource(canvas, { codec: videoCodec, bitrate: EXPORT_BITRATE, hardwareAcceleration: 'prefer-hardware' });
     const audio = new AudioBufferSource({ codec: audioCodec, quality: QUALITY_HIGH });
     output.addVideoTrack(video, { frameRate: OFFLINE_FPS });
     output.addAudioTrack(audio);
@@ -82,7 +81,6 @@ export async function renderOffline(o: OfflineOptions): Promise<Blob | null> {
         mono.position = left.position = right.position = end;
         const frame = analyzer.update(mono, left, right, dt, (i + 1) * dt * 1000);
         renderer.render(o.scene(frame, i * dt, dt), frame, i * dt, dt);
-        frameCtx.drawImage(canvas, 0, 0);
         await video.add(i * dt, dt);
         if (i % 15 === 0) {
           o.onProgress(i / frames);

@@ -89,6 +89,27 @@ export async function restoreImage(): Promise<OverlayImage | null> {
   }
 }
 
+/** Data URL of the stored image (null: none of the user's own) */
+export function storedImage(): string | null {
+  try {
+    return localStorage.getItem(STORE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Keep a preset's image for restoreImage(); null means the look has no image. */
+export function storeImage(url: string | null): void {
+  try {
+    if (url) {
+      localStorage.setItem(STORE_KEY, url);
+      localStorage.removeItem(REMOVED_KEY);
+    } else forgetImage(true);
+  } catch {
+    // Too big or storage blocked: the image is not kept
+  }
+}
+
 /** Back to the built-in image: forget the stored one and the "removed" mark. */
 export async function resetToDefaultImage(): Promise<OverlayImage | null> {
   try {

@@ -5,7 +5,8 @@ import { CUSTOM_PREFIX, loadCustomPalettes, newCustomPalette, saveCustomPalettes
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
 import type { Mode, Palette } from './modes/types';
-import { type OverlayImage, forgetImage, loadImageFile, resetToDefaultImage, restoreImage } from './overlay/image';
+import { type OverlayImage, forgetImage, loadImageFile, resetToDefaultImage, restoreImage, storeImage, storedImage } from './overlay/image';
+import { type Preset, parsePreset, presetSettings, startupPreset } from './presets';
 import { IMAGE_PALETTE_ID, paletteFromCanvas } from './overlay/imagePalette';
 import { FONTS, renderText } from './overlay/text';
 import { type BeatGrid, analyzeBeats } from './audio/beatgrid';
@@ -22,28 +23,38 @@ import { IMAGE_CHOICES, Panel, type PanelActions, type RandomPart } from './ui/P
 import { isDesktop, onMessage, post } from './desktop/bridge';
 import type { DesktopState, ToMain, ToSettings } from './desktop/protocol';
 
-const settings = loadSettings();
+// Desktop app: the startup preset replaces the stored look (and its image) before anything reads them
+const openingPreset = isDesktop ? startupPreset() : null;
+const settings = openingPreset ? presetSettings(loadSettings(), openingPreset.settings) : loadSettings();
+if (openingPreset) {
+  saveSettings(settings);
+  storeImage(openingPreset.image);
+}
 let customPalettes = loadCustomPalettes();
-if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
-// Forget variants and settings of modes that no longer exist
-for (const store of [settings.variants, settings.params]) {
-  for (const id of Object.keys(store)) if (!MODES.some((m) => m.id === id)) delete store[id];
+/** Bring stored or preset settings in line with what this build offers. */
+function sanitize(): void {
+  if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
+  // Forget variants and settings of modes that no longer exist
+  for (const store of [settings.variants, settings.params]) {
+    for (const id of Object.keys(store)) if (!MODES.some((m) => m.id === id)) delete store[id];
+  }
+  // The image palette comes back once the stored image is restored
+  if (settings.palette !== IMAGE_PALETTE_ID && ![...customPalettes, ...PALETTES].some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
+  if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
+  if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
+  settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
+  for (const [key, , names] of IMAGE_CHOICES) {
+    if (!Number.isInteger(settings[key]) || settings[key] < 0 || settings[key] >= names.length) settings[key] = DEFAULTS[key];
+  }
+  settings.imageOpacity = Math.min(1, Math.max(0.1, settings.imageOpacity));
+  settings.imageGlow = Math.min(1, Math.max(0, settings.imageGlow));
+  settings.imageFade = Math.min(1, Math.max(0, settings.imageFade));
+  if (!AUTO_EVERY.includes(settings.autoBeats)) settings.autoBeats = 1;
+  settings.autoSkip = [...new Set(settings.autoSkip.filter((id) => MODES.some((m) => m.id === id)))];
+  // The autopilot needs at least one mode to pick from
+  if (settings.autoSkip.length >= MODES.length) settings.autoSkip = [];
 }
-// The image palette comes back once the stored image is restored
-if (settings.palette !== IMAGE_PALETTE_ID && ![...customPalettes, ...PALETTES].some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
-if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
-if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
-settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
-for (const [key, , names] of IMAGE_CHOICES) {
-  if (!Number.isInteger(settings[key]) || settings[key] < 0 || settings[key] >= names.length) settings[key] = DEFAULTS[key];
-}
-settings.imageOpacity = Math.min(1, Math.max(0.1, settings.imageOpacity));
-settings.imageGlow = Math.min(1, Math.max(0, settings.imageGlow));
-settings.imageFade = Math.min(1, Math.max(0, settings.imageFade));
-if (!AUTO_EVERY.includes(settings.autoBeats)) settings.autoBeats = 1;
-settings.autoSkip = [...new Set(settings.autoSkip.filter((id) => MODES.some((m) => m.id === id)))];
-// The autopilot needs at least one mode to pick from
-if (settings.autoSkip.length >= MODES.length) settings.autoSkip = [];
+sanitize();
 
 const canvas = h('canvas', { class: 'stage' });
 const fileInput = h('input', { type: 'file', accept: 'audio/*,.wav,.wave', hidden: true });
@@ -196,6 +207,7 @@ async function exportInBackground(format: ExportFormat): Promise<void> {
       },
       onProgress: (f) => offline === ctrl && panel.setExportProgress(f),
       signal: ctrl.signal,
+      glFramesFlipped: isDesktop,
     });
     if (blob) {
       download(blob, exportFileName('video/mp4', format, new Date()));
@@ -523,6 +535,12 @@ const actions: PanelActions = {
   toggleTimeline: () => timeline.toggle(),
   back: () => back(),
   canGoBack: () => history.length > 0,
+  currentPreset: (name: string): Preset => ({
+    name,
+    settings: structuredClone(settings),
+    // The built-in image is not stored: keep the one on screen
+    image: storedImage() ?? (currentImage ? currentImage.canvas.toDataURL(currentImage.hasAlpha ? 'image/png' : 'image/jpeg', 0.85) : null),
+  }),
   setFont(id) {
     settings.font = id;
     changed();
@@ -573,6 +591,10 @@ onMessage<ToMain>(async (msg) => {
   if (msg.type === 'hello') return pushState();
   if (msg.type === 'settingsVisible') return void (settingsVisible = msg.on);
   if (msg.type === 'loadFile') return void loadFromUrl(msg.kind, msg.url, msg.name);
+  if (msg.type === 'applyPreset') {
+    const preset = parsePreset(msg.preset);
+    return void (preset && applyPreset(preset));
+  }
   if (msg.type !== 'call') return;
   const fn = Object.hasOwn(actions, msg.name) ? (actions as unknown as Record<string, unknown>)[msg.name] : undefined;
   try {
@@ -587,6 +609,31 @@ onMessage<ToMain>(async (msg) => {
   panel.sync();
   pushState();
 });
+
+/** Desktop app: switch to a saved look (settings and image) without touching the sound source. */
+async function applyPreset(preset: Preset): Promise<void> {
+  Object.assign(settings, presetSettings(settings, preset.settings));
+  sanitize();
+  audio.sensitivity = settings.sensitivity;
+  storeImage(preset.image);
+  const job = ++imageJob;
+  const img = preset.image ? await restoreImage() : null;
+  if (job !== imageJob) return;
+  if (img) showImage(img);
+  else {
+    renderer.setImage(null);
+    currentImage = null;
+    hasImage = false;
+    imagePalette = null;
+    panel.setImagePalette(null);
+  }
+  if (settings.palette === IMAGE_PALETTE_ID && !imagePalette) settings.palette = PALETTES[0].id;
+  autoClock.reset();
+  panel.refreshParams();
+  changed();
+  void updateText();
+  panel.setStatus(`Preset ${preset.name} loaded.`);
+}
 
 /** Desktop app: a file picked in the native dialog, served by the host. */
 async function loadFromUrl(kind: 'audio' | 'image', url: string, name: string): Promise<void> {

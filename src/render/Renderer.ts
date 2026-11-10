@@ -248,6 +248,9 @@ export class Renderer {
   }
 
   /** Render at a fixed size (video export) instead of the window size; null goes back. */
+  /** Draw the picture upside down on the canvas (see render) */
+  flipOutput = false;
+
   setFixedSize(size: { width: number; height: number } | null): void {
     this.fixed = size;
   }
@@ -401,7 +404,9 @@ export class Renderer {
     const dw = gl.drawingBufferWidth;
     const dh = gl.drawingBufferHeight;
     const filter = dw === this.width && dh === this.height ? gl.NEAREST : gl.LINEAR;
-    gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, dw, dh, gl.COLOR_BUFFER_BIT, filter);
+    // Flipped output: for encoders that read the GL buffer bottom row first (WebKitGTK)
+    if (this.flipOutput) gl.blitFramebuffer(0, 0, this.width, this.height, 0, dh, dw, 0, gl.COLOR_BUFFER_BIT, filter);
+    else gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, dw, dh, gl.COLOR_BUFFER_BIT, filter);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
