@@ -29,6 +29,8 @@ function devAudio(): Plugin {
 }
 
 export default defineConfig({
+  // GitHub Pages serves the site under /Visualizer/; the desktop app serves dist/ at the root
+  base: process.env.GH_PAGES ? '/Visualizer/' : '/',
   plugins: [devAudio()],
   build: {
     rollupOptions: {
