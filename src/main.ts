@@ -1,6 +1,6 @@
 import './style.css';
 import { AudioEngine } from './audio/AudioEngine';
-import { AUTO_EVERY, AutoClock, type AutoContext, type AutoParts, EVERYTHING, autoStep } from './autopilot';
+import { AUTO_EVERY, AutoClock, type AutoContext, type AutoParts, EVERYTHING, autoStep, pickOther } from './autopilot';
 import { CUSTOM_PREFIX, loadCustomPalettes, newCustomPalette, saveCustomPalettes } from './customPalettes';
 import { MODES } from './modes';
 import { PALETTES } from './modes/palettes';
@@ -31,6 +31,7 @@ if (openingPreset) {
   storeImage(openingPreset.image);
 }
 let customPalettes = loadCustomPalettes();
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 /** Bring stored or preset settings in line with what this build offers. */
 function sanitize(): void {
   if (!MODES.some((m) => m.id === settings.mode)) settings.mode = MODES[0].id;
@@ -42,13 +43,13 @@ function sanitize(): void {
   if (settings.palette !== IMAGE_PALETTE_ID && ![...customPalettes, ...PALETTES].some((p) => p.id === settings.palette)) settings.palette = PALETTES[0].id;
   if (!FONTS.some((f) => f.id === settings.font)) settings.font = FONTS[0].id;
   if (!Number.isInteger(settings.filter) || !FILTERS[settings.filter]) settings.filter = 0;
-  settings.filterAmount = Math.min(1, Math.max(0, settings.filterAmount));
+  settings.filterAmount = clamp01(settings.filterAmount);
   for (const [key, , names] of IMAGE_CHOICES) {
     if (!Number.isInteger(settings[key]) || settings[key] < 0 || settings[key] >= names.length) settings[key] = DEFAULTS[key];
   }
   settings.imageOpacity = Math.min(1, Math.max(0.1, settings.imageOpacity));
-  settings.imageGlow = Math.min(1, Math.max(0, settings.imageGlow));
-  settings.imageFade = Math.min(1, Math.max(0, settings.imageFade));
+  settings.imageGlow = clamp01(settings.imageGlow);
+  settings.imageFade = clamp01(settings.imageFade);
   if (!AUTO_EVERY.includes(settings.autoBeats)) settings.autoBeats = 1;
   settings.autoSkip = [...new Set(settings.autoSkip.filter((id) => MODES.some((m) => m.id === id)))];
   // The autopilot needs at least one mode to pick from
@@ -173,7 +174,6 @@ async function useImage(file: File): Promise<void> {
 let recorder: VideoRecorder | null = null;
 let recordTimer = 0;
 
-/** Record the stage in the chosen format with the source audio; a file source plays once from the start. */
 let offline: AbortController | null = null;
 
 /** Make the video from the whole loaded track off-screen, with a copy of the current look. */
@@ -221,6 +221,7 @@ async function exportInBackground(format: ExportFormat): Promise<void> {
   }
 }
 
+/** Record the stage in the chosen format with the source audio; a file source plays once from the start. */
 function startExport(format: ExportFormat, background = false): void {
   if (background) {
     void exportInBackground(format);
@@ -332,7 +333,7 @@ function randomize(part?: RandomPart): void {
   if (part === 'filter') {
     // The filter button always lands on a filter, never on a clean picture
     const filters = Array.from({ length: FILTERS.length - 1 }, (_, i) => i + 1);
-    settings.filter = filters.length > 1 ? filters.filter((f) => f !== settings.filter)[Math.floor(Math.random() * (filters.length - 1))] : filters[0];
+    settings.filter = pickOther(filters, settings.filter, Math.random);
   } else {
     autoStep(settings, AUTO_CONTEXT, Math.random, part ? { ...NOTHING, ...PART_FLAGS[part] } : EVERYTHING);
   }
