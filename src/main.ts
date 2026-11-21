@@ -144,6 +144,14 @@ function showImage(img: OverlayImage): void {
   imagePalette = paletteFromCanvas(img.canvas);
   panel.setImagePalette(imagePalette);
 }
+
+function clearImage(): void {
+  renderer.setImage(null);
+  currentImage = null;
+  hasImage = false;
+  imagePalette = null;
+  panel.setImagePalette(null);
+}
 let textJob = 0;
 let imageJob = 0;
 
@@ -462,12 +470,8 @@ const actions: PanelActions = {
   },
   removeImage() {
     imageJob++;
-    renderer.setImage(null);
-    currentImage = null;
+    clearImage();
     forgetImage(true);
-    hasImage = false;
-    imagePalette = null;
-    panel.setImagePalette(null);
     if (settings.palette === IMAGE_PALETTE_ID) settings.palette = PALETTES[0].id;
     changed();
   },
@@ -621,13 +625,7 @@ async function applyPreset(preset: Preset): Promise<void> {
   const img = preset.image ? await restoreImage() : null;
   if (job !== imageJob) return;
   if (img) showImage(img);
-  else {
-    renderer.setImage(null);
-    currentImage = null;
-    hasImage = false;
-    imagePalette = null;
-    panel.setImagePalette(null);
-  }
+  else clearImage();
   if (settings.palette === IMAGE_PALETTE_ID && !imagePalette) settings.palette = PALETTES[0].id;
   autoClock.reset();
   panel.refreshParams();
@@ -800,7 +798,6 @@ window.addEventListener('pointermove', wake);
 window.addEventListener('keydown', wake);
 wake();
 
-// Browsers only allow audio after a user gesture
 /** Local dev server: start with its track (vite.config.ts) instead of the demo loop. */
 async function useDevAudio(): Promise<boolean> {
   try {
@@ -815,6 +812,7 @@ async function useDevAudio(): Promise<boolean> {
   }
 }
 
+// Browsers only allow audio after a user gesture
 /** Track dropped on the start screen, played when Start is pressed */
 let pendingTrack: File | null = null;
 const startNote = h('p', { class: 'start-note' });
