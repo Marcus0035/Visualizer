@@ -1,14 +1,14 @@
 # Visualizer
 
-Audio-reaktivni vizualizer v prohlizeci (WebGL2 + Web Audio), inspirovany Visual Lab Pro.
+Audio-reactive visualizer for the browser (WebGL2 + Web Audio). [Live demo](https://marcus0035.github.io/Visualizer/)
 
-## Spusteni
+## Getting started
 
 ```
 npm install
 npm run dev      # http://localhost:5173
-npm test         # unit testy analyzy zvuku
-npm run build    # produkcni build do dist/
+npm test         # audio analysis unit tests
+npm run build    # production build into dist/
 ```
 
 ## Desktop app
@@ -23,35 +23,35 @@ in a second window (settings button or H), all sections at once, changes apply l
 settings window: 1-7 section, j/k scroll, g/G top/bottom, Ctrl+W close, Ctrl+Q quit. Videos go to
 ~/Videos. No tab audio source (system sound: the "Monitor of ..." input).
 
-## Zdroje zvuku
-- Demo: vestavena smycka (bez mikrofonu)
-- Vstup: mikrofon / line-in; zvuk systemu pres zarizeni "Monitor of ..." (PipeWire/Pulse)
-- Soubor: tlacitko nebo drag and drop
-- Karta: sdileny zvuk karty prohlizece (Chromium)
+## Audio sources
+- Demo: built-in loop (no microphone needed)
+- Input: microphone / line-in; system sound via a "Monitor of ..." device (PipeWire/Pulse)
+- File: button or drag and drop
+- Tab: shared browser tab audio (Chromium)
 
-## Rezimy
-1. Techno - tunel, lasery, bloky, industrial (vse se prepina na kick); nastaveni rychlost, hustota, zablesk, jas, zmena vzoru po 1/2/4/8 kicich
-2. Osciloskop - vlna, stereo XY, kruh
-3. Plasma - tekuta, svetelne tyce (shader)
-4. Matrix - znaky, binarni
+## Modes
+1. Techno - tunnel, lasers, blocks, industrial (everything switches on the kick); settings for speed, density, flash, brightness, pattern change every 1/2/4/8 kicks
+2. Oscilloscope - waveform, stereo XY, circle
+3. Plasma - fluid, light bars (shader)
+4. Matrix - characters, binary
 
-Palety: 8 tmavych s jednou hlavni barvou (Krev, Jed, Ultrafialova, Kobalt, Ohen, Tyrkys, Magenta, Zlato) + 7 puvodnich.
+Palettes: 8 dark ones with a single main color (Blood, Venom, Ultraviolet, Cobalt, Fire, Turquoise, Magenta, Gold) plus 7 originals.
 
-Vlastni obrazek (barvy palety, obrys, original) a text pres jakykoli rezim; pulzuji s basy, text se na beat trha.
+Custom image (palette colors, outline, original) and text over any mode; they pulse with the bass, and the text jitters on the beat.
 
-Filtry pres cely obraz (jako v CapCutu, bezi celou skladbu): rozbity monitor, VHS, datamosh, otresy, kaleidoskop, pixelace, rastr, stopy, nocni videni; sila a zesileni na kick.
+Full-frame filters (running through the whole track): broken monitor, VHS, datamosh, shake, kaleidoscope, pixelate, halftone, trails, night vision; strength and kick boost are adjustable.
 
-Nahodne (tlacitko vlevo nahore, kolecko mysi dolu nebo sipka vpravo): uplne novy vizual (rezim, varianta, nastaveni, tmava paleta, filtr); kolecko nahoru, sipka vlevo nebo tlacitko zpet vrati predchozi.
+Random (top-left button, mouse wheel down or right arrow): a completely new look (mode, variant, settings, dark palette, filter); wheel up, left arrow or the back button returns to the previous one.
 
-Autopilot (ikona vpravo nahore nebo A): na kazdy kick (nebo po 2 az 32 kicich) sam meni rezim, variantu, nastaveni rezimu, pripadne tmavou paletu a filtr; co se meni a ktere rezimy se pouzivaji jde vybrat. R zmeni hned.
+Autopilot (icon at the top right or A): on every kick (or every 2 to 32 kicks) it changes the mode, variant, mode settings, and optionally the dark palette and filter; you choose what changes and which modes are used. R changes immediately.
 
-Efekty: CRT, zrno, strobe a glitch na beat. Klavesy: 1-4 rezim, V varianta, P paleta, N filtr, A autopilot, R zmenit hned, C/G/S/X efekty, F cela obrazovka, H nebo ozubene kolo vpravo nahore nastaveni (Esc zavre), mezernik play/pauza.
+Effects: CRT, grain, strobe and glitch on the beat. Keys: 1-4 mode, V variant, P palette, N filter, A autopilot, R change now, C/G/S/X effects, F fullscreen, H or the gear at the top right for settings (Esc closes), space play/pause.
 
-## Struktura
-- `src/audio` - AudioEngine (zdroje, analyzery), analysis (pasma, beat, log spektrum), demo smycka
-- `src/autopilot.ts` - automaticke stridani (nahodny krok, pocitani kicku)
-- `src/modes` - rezimy (Canvas 2D nebo fragment shader), palety
-- `src/overlay` - vlastni obrazek a text (fonty Anton, Unbounded, UnifrakturMaguntia, Space Mono)
-- `src/render` - Renderer (rezim do textury, post pass s efekty a filtry, predchozi snimek pro datamosh a stopy), shadery, seznam filtru
-- `src/ui` - nastaveni jako okno pres celou obrazovku se zalozkami (Zvuk, Rezim, Barvy a efekty, Filtry, Autopilot, Obrazek a text, Zkratky), nastrojova lista vpravo nahore
-- Novy rezim: soubor v `src/modes` implementujici `Mode2D` nebo `ModeGL`, pridat do `src/modes/index.ts`; vlastni nastaveni pres `params` (GL rezim je dostane jako float uniformy)
+## Structure
+- `src/audio` - AudioEngine (sources, analyzers), analysis (bands, beat, log spectrum), demo loop
+- `src/autopilot.ts` - automatic switching (random step, kick counting)
+- `src/modes` - modes (Canvas 2D or fragment shader), palettes
+- `src/overlay` - custom image and text (fonts Anton, Unbounded, UnifrakturMaguntia, Space Mono)
+- `src/render` - Renderer (mode into a texture, post pass with effects and filters, previous frame for datamosh and trails), shaders, filter list
+- `src/ui` - settings as a full-screen window with tabs (Audio, Mode, Colors and effects, Filters, Autopilot, Image and text, Shortcuts), toolbar at the top right
+- New mode: add a file in `src/modes` implementing `Mode2D` or `ModeGL`, register it in `src/modes/index.ts`; custom settings via `params` (a GL mode receives them as float uniforms)
